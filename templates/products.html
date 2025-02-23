@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Page</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      margin: 30px;
+    }
+    nav {
+      background-color: #0056b3;
+      color: white;
+      padding: 25px;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin-right: 30px;
+    }
+    .product-container {
+      padding: 3%;
+    }
+    .product-card {
+      border: 3px solid #ccc;
+      padding: 10px;
+      margin-left: 20px;
+      margin-right: 20px;
+      display: inline-block;
+      text-align: center;
+      margin-bottom: 3%;
+      width: 20%;
+      height: 30%;
+    }
+    .product-card img {
+      width: 100%;
+      height: auto;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/products">Products</a>
+  <a href="/carts">Cart</a>
+  <a href="#" onclick="logout()">Logout</a>
+</nav>
+
+<script>
+  function logout() {
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/logout';
+    document.body.appendChild(form);
+    form.submit();
+  }
+</script>
+
+<h1>Products</h1>
+
+<div class="product-container">
+  {{ if .Products }}
+  {{ range .Products }}
+  <div class="product-card">
+    <img src="{{ .ImageURL }}" alt="{{ .Name }}">
+    <h3>{{ .Name }}</h3>
+    <p>{{ .Description }}</p>
+    <p><strong>Stock: {{ .Quantity }}</strong></p>
+    <p><strong>Price: ${{ .Price }}</strong></p>
+    <form action="/add-to-cart" method="POST">
+      <input type="hidden" name="name" value="{{ .Name }}">
+      <input type="hidden" name="price" value="{{ .Price }}">
+      <input type="hidden" name="quantity" value="1">
+      <input type="hidden" name="product_id" value="{{ .ID }}">
+      <button type="submit">Add to Cart</button>
+    </form>
+  </div>
+  {{ end }}
+  {{ else }}
+  <p style="color:red;">Not Found Products.</p>
+  {{ end }}
+</div>
+
+</body>
+</html>

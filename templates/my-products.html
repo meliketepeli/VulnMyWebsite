@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Products</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            margin: 30px;
+        }
+        nav {
+            background-color: #0056b3;
+            color: white;
+            padding: 25px;
+        }
+        nav a {
+            color: white;
+            text-decoration: none;
+            margin-right: 30px;
+        }
+        .my-product-container {
+            padding: 3%;
+        }
+        .my-product-card {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px;
+            display: inline-block;
+            width: 200px;
+            text-align: center;
+        }
+        .my-product-card img {
+            width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="/add-products">Add Products</a>
+    <a href="/my-orders">My Orders</a>
+    <a href="#" onclick="logout()">Logout</a>
+</nav>
+
+<script>
+    function logout() {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/logout';
+        document.body.appendChild(form);
+        form.submit();
+    }
+</script>
+
+<h1>My Products</h1>
+
+<div class="my-product-container">
+    {{ if .SellerProducts }}
+    {{ range .SellerProducts }}
+    <div class="my-product-card">
+        <img src="{{ .ImageURL }}" alt="{{ .Name }}">
+        <h3>{{ .Name }}</h3>
+        <p>{{ .Description }}</p>
+        <p><strong>Stock: {{ .Quantity }}</strong></p>
+        <p><strong>Price: ${{ .Price }}</strong></p>
+    </div>
+    {{ end }}
+    {{ else }}
+    <p style="color:red;">Not Found Your Products.</p>
+    {{ end }}
+</div>
+
+</body>
+</html>

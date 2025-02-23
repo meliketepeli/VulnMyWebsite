@@ -1,0 +1,29 @@
+{{ define "admin" }}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel</title>
+</head>
+<body>
+<h1>Admin Panel</h1>
+<form action="/admin/addProduct" method="POST">
+  <label for="name">Product Name:</label>
+  <input type="text" id="name" name="name" required><br>
+
+  <label for="description">Description:</label>
+  <textarea id="description" name="description" required></textarea><br>
+
+  <label for="price">Price:</label>
+  <input type="text" id="price" name="price" required><br>
+
+  <label for="image_url">Image URL:</label>
+  <input type="text" id="image_url" name="image_url"><br>
+
+  <button type="submit">Add Product</button>
+</form>
+</body>
+</html>
+
+{{ end }}
