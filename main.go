@@ -236,14 +236,14 @@ func loginHandler(c *fiber.Ctx) error {
         Name:     "userID",
         Value:    user.ID.Hex(),
         Expires:  time.Now().Add(24 * time.Hour),
-        HTTPOnly: true,
+       // HTTPOnly: true,
     })
 
     c.Cookie(&fiber.Cookie{
         Name:     "Username",
         Value:    user.Username,
         Expires:  time.Now().Add(24 * time.Hour),
-        HTTPOnly: true,
+        // HTTPOnly: true,
     })
 
     if user.Role == "user" {
@@ -312,14 +312,14 @@ func logoutHandler(c *fiber.Ctx) error {
 		Name:     "userID",
 		Value:    "",
 		Expires:  time.Now().Add(-1 * time.Hour),
-		HTTPOnly: true,
+		//HTTPOnly: true,
 	})
 
 	c.Cookie(&fiber.Cookie{
 		Name:     "Username",
 		Value:    "",
 		Expires:  time.Now().Add(-1 * time.Hour),
-		HTTPOnly: true,
+		//HTTPOnly: true,
 	})
 
 	return c.Redirect("/")
@@ -814,21 +814,14 @@ func addProduct(c *fiber.Ctx) error {
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add product to products"})
 		}
-	
-		// ✅ Ürünleri döndür
-		//("<div><h2>" + name + "</h2><p>" + description + "</p></div>")
-	// Backend kodunu güncelle
 
 		// ✅ `getSellerProductsFromDB` çağrısına string parametre ekle
 		getSellerProductsFromDB(uid.Hex())
 
 		c.Set("Content-Type", "text/html")
-		c.Set("Content-Security-Policy", "default-src 'self' 'unsafe-inline' 'unsafe-eval';")
-		c.Set("X-XSS-Protection", "0")
-
 		return c.Send([]byte("<div>" + description + "</div>"))
 		
-		// return c.Redirect("/my-products")
+	
 	}
 	
 
