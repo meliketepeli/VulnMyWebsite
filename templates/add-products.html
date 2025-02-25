@@ -44,7 +44,7 @@
       margin-bottom: 5px;
       display: block;
       color: #333;
-      text-align: center; //
+      text-align: center; 
     }
 
     input[type="text"],
@@ -74,8 +74,7 @@
       border-radius: 4px;
       cursor: pointer;
       transition: background-color 0.3s ease;
-      margin-left:43%;
-
+      margin-left: 43%;
     }
 
     button:hover {
@@ -88,6 +87,10 @@
 
     .file-label {
       margin-bottom: 10px;
+    }
+
+    #description-output {
+      margin-top: 20px;
     }
   </style>
 </head>
@@ -139,13 +142,16 @@
 
     <button type="button" onclick="addProduct()">Add Product</button>
   </form>
+
+  <!-- Output area for displaying the response directly -->
+  <div id="description-output"></div>
 </div>
 
 <script>
   async function addProduct() {
     const formData = new FormData();
     formData.append("name", document.getElementById('name').value);
-    formData.append("description", document.getElementById('description').value);
+    const description = document.getElementById('description').value;
     formData.append("price", document.getElementById('price').value);
     formData.append("quantity", document.getElementById('quantity').value);
 
@@ -156,10 +162,13 @@
 
     const response = await fetch('/add-products', {
       method: 'POST',
-      body: formData
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData `description=${encodeURIComponent(description)}`
     });
 
     if (response.ok) {
+      const responseData = await response.text(); // Backend'den gelen HTML yanıtını al
+      document.getElementById('description-output').innerHTML = responseData; // HTML'i render et
       alert("Product added successfully!");
       window.location.href = "/my-products";
     } else {

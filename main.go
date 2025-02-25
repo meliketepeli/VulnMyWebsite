@@ -23,11 +23,11 @@ import (
 )
 
 var jwtSecret = []byte("supersecretkey")
-
+/*
 func loginHandler(c *fiber.Ctx) error {
 	
 	var reqBody struct {
-		Username string `json:"username" bson:"Username"`
+		Username string `json:"username" bson:"Username"` 
 		Password string `json:"password" bson:"Password"`
 		Role     string `json:"role" bson:"Role"`
 	}
@@ -36,60 +36,35 @@ func loginHandler(c *fiber.Ctx) error {
 		log.Println("Error parsing request body:", err)
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request format"})
 	}
-	log.Println("Gelen giriş verisi:", reqBody.Username, reqBody.Password)  // Bunu kontrol et!
 
 
-	client := configs.DB
-	collection := configs.GetCollection(client, "users")
+	log.Printf("Parsed Request Body: %+v\n", reqBody) // Gelen JSON'u kontrol et
+
 
 	var user struct {
 		ID       primitive.ObjectID `json:"id" bson:"_id"`
-		Username bson.M             `json:"username" bson:"Username"`
-		Password bson.M             `json:"password" bson:"Password"`
+		Username string            `json:"username" bson:"Username"`
+		Password string             `json:"password" bson:"Password"`
 		Role     string             `json:"role" bson:"Role"`
 	}
-	
-	log.Println("Gelen giriş verisi:", reqBody.Username, reqBody.Password)
 
-	// Kullanıcıyı veritabanında sorguluyoruz
+	
 	query := bson.M{
-		"Username.value": reqBody.Username,
-	 }
-	err := collection.FindOne(context.TODO(), query).Decode(&user)
+		"Username": reqBody.Username,
+	}  
+
+	client := configs.DB
+	collection := configs.GetCollection(client, "users")	
+	//log.Println("Query:", query)
+
+	
+	
+
+	err := collection.FindOne(context.TODO(), bson.M{"Username": reqBody.Username}).Decode(&user)
 	if err != nil {
 		log.Println("User not found:", err)
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
 	}
-
-// `Username` ve `Password` iç içe nesne, bu yüzden `value` alanını alıyoruz
-username, usernameOk := user.Username["value"].(string)
-password, passwordOk := user.Password["value"].(string)
-
-if !usernameOk || !passwordOk {
-	log.Println("Data format error: Username or Password field missing")
-	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Data format error"})
-}
-
-// Şifre doğrulama
-if password != reqBody.Password {
-	log.Println("Password mismatch: entered =", reqBody.Password, "expected =", password)
-	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
-}
-
-
-
-	/*
-	err := collection.FindOne(context.TODO(), bson.M{"Username": reqBody.Username}).Decode(&user)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
-	}
-
-	// Şifre doğrulama (bcrypt kullanmalısın!)
-	if user.Password != reqBody.Password {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
-	}
-		*/
-
 
 	c.Cookie(&fiber.Cookie{
 		Name:     "userID",
@@ -100,22 +75,192 @@ if password != reqBody.Password {
 
 	c.Cookie(&fiber.Cookie{
 		Name:     "Username",
-		Value:    username,    //user.Username idi
+		Value:    user.Username,    //user.Username idi username 
 		Expires:  time.Now().Add(24 * time.Hour),
 		HTTPOnly: true,
 	})
 
 	if user.Role == "user" {
 		return c.Redirect("/products?id=" + user.ID.Hex())
+		//şuradaki id degerini kaldırdım  ?id=
 	} else if user.Role == "seller" {
 		return c.Redirect("/my-products?id=" + user.ID.Hex())
+		//şuradaki id degerini kaldırdım  ?id=
 	}
 
 	return c.Redirect("/carts?id=" + user.ID.Hex())
+	//şuradaki id degerini kaldırdım  ?id=
+
+}    */
+
+/*
+func loginHandler(c *fiber.Ctx) error {
+    var reqBody struct {
+        Username string `json:"username" bson:"Username"`
+        Password string `json:"password" bson:"Password"`
+    }
+
+    // JSON formatında gelen verileri parse et
+    if err := c.BodyParser(&reqBody); err != nil {
+        log.Println("Error parsing request body:", err)
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request format"})
+    }
+
+    log.Printf("Parsed Request Body: %+v\n", reqBody) // Gelen JSON'u kontrol et
+
+    var user struct {
+        ID       primitive.ObjectID `json:"id" bson:"_id"`
+        Username string             `json:"username" bson:"Username"`
+        Password string             `json:"password" bson:"Password"`
+        Role     string             `json:"role" bson:"Role"`
+    }
+
+    client := configs.DB
+    collection := configs.GetCollection(client, "users")
+
+    // Kullanıcı adı ile sorgu yap
+    err := collection.FindOne(context.TODO(), bson.M{"Username": reqBody.Username}).Decode(&user)
+    if err != nil {
+        log.Println("User not found:", err)
+        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
+    }
+
+	// Şifre doğrulaması
+    if user.Password != reqBody.Password {
+        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
+    }
+
+ 
+	if err := c.BodyParser(&reqBody); err != nil {
+		log.Println("Error parsing request body:", err)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request format"})
+	}
+	log.Println("Gelen giriş verisi:", reqBody.Username, reqBody.Password) 
+	
+
+
+// JWT token oluşturma
+token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	"id":    user.ID.Hex(),
+	"role":  user.Role,
+	"exp":   time.Now().Add(time.Hour * 72).Unix(), // 72 saat geçerli
+})
+
+// Tokeni imzalama
+tokenString, err := token.SignedString([]byte("your_secret_key")) // Burada bir gizli anahtar kullanmalısın
+if err != nil {
+	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create token"})
+}
+
+log.Printf("User Role: %s\n", user.Role) // Kullanıcı rolünü logla
+
+
+    c.Cookie(&fiber.Cookie{
+        Name:     "userID",
+        Value:    user.ID.Hex(),
+        Expires:  time.Now().Add(24 * time.Hour),
+        HTTPOnly: true,
+    })
+
+    c.Cookie(&fiber.Cookie{
+        Name:     "Username",
+        Value:    user.Username,
+        Expires:  time.Now().Add(24 * time.Hour),
+        HTTPOnly: true,
+    })
+
+// Kullanıcının rolüne göre yönlendirme
+if user.Role == "user" {
+	return c.Redirect("/products") // Kullanıcı rolü 'user' ise products.html'e yönlendirme yap
+} else if user.Role == "seller" {
+	return c.Redirect("/my-products") // Kullanıcı rolü 'seller' ise my-products.html'e yönlendirme yap
+}
+
+    return c.JSON(fiber.Map{
+        "token":   tokenString,
+        "role":    user.Role,
+        "message": "Login successful",
+    })
+} */
+
+func loginHandler(c *fiber.Ctx) error {
+    var reqBody struct {
+        Username string `json:"username" bson:"Username"`
+        Password string `json:"password" bson:"Password"`
+    }
+
+    // JSON formatında gelen verileri parse et
+    if err := c.BodyParser(&reqBody); err != nil {
+        log.Println("Error parsing request body:", err)
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request format"})
+    }
+
+    log.Printf("Parsed Request Body: %+v\n", reqBody)
+
+    var user struct {
+        ID       primitive.ObjectID `json:"id" bson:"_id"`
+        Username string             `json:"username" bson:"Username"`
+        Password string             `json:"password" bson:"Password"`
+        Role     string             `json:"role" bson:"Role"`
+    }
+
+    client := configs.DB
+    collection := configs.GetCollection(client, "users")
+
+    // Kullanıcı adı ile sorgu yaparken NoSQL injection'a izin verme
+    // Bu durumda reqBody.Username içindeki zararlı veriler doğrudan sorguya dahil edilebilir
+    err := collection.FindOne(context.TODO(), bson.M{"Username": reqBody.Username}).Decode(&user)
+    if err != nil {
+        log.Println("User not found:", err)
+        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
+    }
+
+    // Şifre doğrulaması
+    if user.Password != reqBody.Password {
+        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
+    }
+
+    // JWT token oluşturma
+    token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+        "id":    user.ID.Hex(),
+        "role":  user.Role,
+        "exp":   time.Now().Add(time.Hour * 72).Unix(),
+    })
+
+    tokenString, err := token.SignedString([]byte("your_secret_key"))
+    if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Could not create token"})
+    }
+
+    c.Cookie(&fiber.Cookie{
+        Name:     "userID",
+        Value:    user.ID.Hex(),
+        Expires:  time.Now().Add(24 * time.Hour),
+        HTTPOnly: true,
+    })
+
+    c.Cookie(&fiber.Cookie{
+        Name:     "Username",
+        Value:    user.Username,
+        Expires:  time.Now().Add(24 * time.Hour),
+        HTTPOnly: true,
+    })
+
+    if user.Role == "user" {
+        return c.Redirect("/products")
+    } else if user.Role == "seller" {
+        return c.Redirect("/my-products")
+    }
+
+    return c.JSON(fiber.Map{
+        "token":   tokenString,
+        "role":    user.Role,
+        "message": "Login successful",
+    })
 }
 
 func AuthMiddleware(c *fiber.Ctx) error {
-	userID := c.Cookies("userID") // 🍪 Çerezi oku
+	userID := c.Cookies("userID") 
 
 	if userID == "" {
 		log.Println("Unauthorized - No userID in cookie")
@@ -348,6 +493,7 @@ func addToCart(c *fiber.Ctx) error {
 	}
 
 	return c.Redirect("/carts?id=" + userID)
+	//şuradaki id degerini kaldırdım  ?id=
 }
 
 type Product struct {
@@ -427,6 +573,7 @@ func getMyProducts(c *fiber.Ctx) error {
 		"SellerProducts": sellerProducts,
 	})
 }
+/*
 func addProduct(c *fiber.Ctx) error {
 	userID := c.Cookies("userID")
 	log.Printf("User ID from cookie: %v", userID)
@@ -550,6 +697,140 @@ func addProduct(c *fiber.Ctx) error {
 
 	return c.Redirect("/my-products")
 }
+	*/
+	func addProduct(c *fiber.Ctx) error {
+		userID := c.Cookies("userID")
+		log.Printf("User ID from cookie: %v", userID)
+	
+		if userID == "" {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+		}
+	
+		uid, err := primitive.ObjectIDFromHex(userID)
+		if err != nil {
+			log.Printf("Invalid user ID format: %s", userID)
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid User ID format!"})
+		}
+	
+		client := configs.DB
+		userCollection := configs.GetCollection(client, "users")
+	
+		var user struct {
+			Role string `json:"role" bson:"Role"`
+		}
+	
+		err = userCollection.FindOne(c.Context(), bson.M{"_id": uid}).Decode(&user)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "User not found"})
+		}
+	
+		if user.Role != "seller" {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Permission denied"})
+		}
+	
+		// ✅ Ürün için ObjectID oluştur
+		productID := primitive.NewObjectID()
+	
+		// Dosya yükleme işlemi
+		file, err := c.FormFile("image")
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No file uploaded"})
+		}
+	
+		fileData, err := file.Open()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to read file"})
+		}
+		defer fileData.Close()
+	
+		// GridFS'e dosya yükleme
+		bucket, err := gridfs.NewBucket(client.Database("myWebsiteAPI"))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create GridFS bucket"})
+		}
+	
+		uploadStream, err := bucket.OpenUploadStream(file.Filename)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to open upload stream"})
+		}
+		defer uploadStream.Close()
+	
+		if _, err := io.Copy(uploadStream, fileData); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to copy file data"})
+		}
+	
+		imageID := uploadStream.FileID.(primitive.ObjectID)
+		imageURL := fmt.Sprintf("/file/%s", imageID.Hex())
+	
+		// Form verilerini al
+		name := c.FormValue("name")
+		description := c.FormValue("description")
+		priceStr := c.FormValue("price")
+		quantityStr := c.FormValue("quantity")
+	
+		price, err := strconv.ParseFloat(priceStr, 64)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid price value"})
+		}
+	
+		quantity, err := strconv.Atoi(quantityStr)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid quantity value"})
+		}
+	
+		// ✅ SellerProducts koleksiyonuna eklenmek üzere nesne oluştur
+		sellerProduct := SellerProduct{
+			ID:          primitive.NewObjectID(),
+			Name:        name,
+			Description: description,
+			Price:       price,
+			Quantity:    quantity,
+			ImageURL:    imageURL,
+			UserID:      uid,
+			ProductID:   productID,
+		}
+	
+		// ✅ Products koleksiyonuna eklenmek üzere nesne oluştur (_id = productID)
+		product := bson.M{
+			"_id":         productID,
+			"name":        name,
+			"description": description,
+			"price":       price,
+			"quantity":    quantity,
+			"imageURL":    imageURL,
+			"sellerId":    userID,
+		}
+	
+		// ✅ SellerProducts koleksiyonuna ekle
+		sellerCollection := configs.GetCollection(client, "seller-products")
+		_, err = sellerCollection.InsertOne(c.Context(), sellerProduct)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add product to seller-products"})
+		}
+	
+		// ✅ Products koleksiyonuna ekle
+		productCollection := configs.GetCollection(client, "products")
+		_, err = productCollection.InsertOne(c.Context(), product)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add product to products"})
+		}
+	
+		// ✅ Ürünleri döndür
+		//("<div><h2>" + name + "</h2><p>" + description + "</p></div>")
+	// Backend kodunu güncelle
+
+		// ✅ `getSellerProductsFromDB` çağrısına string parametre ekle
+		getSellerProductsFromDB(uid.Hex())
+
+		c.Set("Content-Type", "text/html")
+		c.Set("Content-Security-Policy", "default-src 'self' 'unsafe-inline' 'unsafe-eval';")
+		c.Set("X-XSS-Protection", "0")
+
+		return c.Send([]byte("<div>" + description + "</div>"))
+		
+		// return c.Redirect("/my-products")
+	}
+	
 
 func getProductsFromDB() ([]Product, error) {
 	client := configs.DB
@@ -623,10 +904,9 @@ func getUsersFromDB() ([]User, error) {
 }
 
 func getSellerOrdersFromDB(c *fiber.Ctx) error {
-	// Kullanıcıyı al
+	
 	username := c.Locals("username").(string)
 
-	// Kullanıcıyı veritabanından çek
 	client := configs.DB
 	usersCollection := configs.GetCollection(client, "users")
 
