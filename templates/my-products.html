@@ -42,8 +42,8 @@
 <body>
 
 <nav>
-    <a href="/add-products">Add Products</a>
-    <a href="/my-orders">My Orders</a>
+    <a href="/add-products?id={{ .RandomID }}">Add Products</a>
+    <a href="/my-orders?id={{ .RandomID }}">My Orders</a>
     <a href="#" onclick="logout()">Logout</a>
 </nav>
 
@@ -57,23 +57,25 @@
     }
 </script>
 
-<h1>My Products</h1>
+<h1>My Products (RandomID: {{ .RandomID }})</h1>
 
-<div class="my-product-container">
-    {{ if .SellerProducts }}
-    {{ range .SellerProducts }}
-    <div class="my-product-card">
-        <img src="{{ .ImageURL }}" alt="{{ .Name }}">
-        <h3>{{ .Name }}</h3>
-        <p>{{ .Description }}</p>
-        <p><strong>Stock: {{ .Quantity }}</strong></p>
-        <p><strong>Price: ${{ .Price }}</strong></p>
+{{ if .SellerProducts }}
+    <p>✅ DEBUG: {{ len .SellerProducts }} Ürün Bulundu</p>
+    <div class="my-product-container">
+        {{ range .SellerProducts }}
+        <div class="my-product-card">
+            <img src="{{ .ImageURL }}" alt="{{ .Name }}">
+            <h3>{{ .Name }}</h3>
+            <p>{{ .Description }}</p>
+            <p><strong>Stock: {{ .Quantity }}</strong></p>
+            <p><strong>Price: ${{ .Price }}</strong></p>
+        </div>
+        {{ end }}
     </div>
-    {{ end }}
-    {{ else }}
-    <p style="color:red;">Not Found Your Products.</p>
-    {{ end }}
-</div>
+{{ else }}
+    <p style="color:red;">❌ Not Found Your Products. (DEBUG: RandomID: {{ .RandomID }})</p>
+{{ end }}
+
 
 </body>
 </html>

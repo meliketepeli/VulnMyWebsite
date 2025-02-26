@@ -100,8 +100,8 @@
 <body>
 
 <nav>
-  <a href="/my-products">My Products</a>
-  <a href="/my-orders">My Orders</a>
+  <a href="/my-products?id={{ .RandomID }}">My Products</a>
+  <a href="/my-orders?id={{ .RandomID }}">My Orders</a>
   <a href="#" onclick="logout()">Logout</a>
 </nav>
 
@@ -117,7 +117,7 @@
 
 <div class="container">
   <h1>Add New Product</h1>
-  <form action="/add-products" method="POST" enctype="multipart/form-data" class="add-products">
+  <form action="/add-products?id={{ .RandomID }}" method="POST" enctype="multipart/form-data" class="add-products">
     <div class="form-group">
       <label for="name">Product Name:</label>
       <input type="text" id="name" name="name"required>
@@ -175,7 +175,7 @@
 
      
       alert("Product added successfully!");
-      window.location.href = "/my-products";
+      window.location.href = "/my-products?id={{ .RandomID }}";
     } else {
       alert("Failed to add product.");
     }
