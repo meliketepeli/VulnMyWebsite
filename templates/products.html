@@ -72,7 +72,7 @@
     <p>{{ .Description }}</p>
     <p><strong>Stock: {{ .Quantity }}</strong></p>
     <p><strong>Price: ${{ .Price }}</strong></p>
-    <form action="/add-to-cart" method="POST">
+   <form action="add-to-cart" method="POST">
       <input type="hidden" name="name" value="{{ .Name }}">
       <input type="hidden" name="price" value="{{ .Price }}">
       <input type="hidden" name="quantity" value="1">

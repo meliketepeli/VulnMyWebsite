@@ -5,8 +5,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"net/http"
-	"newProject/models"
-	"newProject/services"
+	"myWebsite-main/models"
+	"nmyWebsite-main/services"
 )
 
 type UserHandler struct {
@@ -66,3 +66,27 @@ func (h UserHandler) DeleteUser(c *fiber.Ctx) error {
 
 	return c.Status(http.StatusOK).JSON(fiber.Map{"State": true})
 }
+
+func (h UserHandler) LoginUser(c *fiber.Ctx) error {
+    var loginData map[string]interface{} // Struct yerine MAP kullanıyoruz!
+
+    if err := c.BodyParser(&loginData); err != nil {
+        return c.Status(http.StatusBadRequest).JSON(err.Error())
+    }
+
+    username, uExists := loginData["username"]
+    password, pExists := loginData["password"]
+
+    if !uExists || !pExists {
+        return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "Username and password required"})
+    }
+
+    user, err := h.Service.UserLogin(username, password)
+
+    if err != nil || user == nil {
+        return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"message": "Geçersiz giriş!"})
+    }
+
+    return c.Status(http.StatusOK).JSON(fiber.Map{"message": "Giriş başarılı!", "user": user.Username})
+}
+

@@ -38,13 +38,16 @@
         }
     </style>
 </head>
-<nav>
-    <a href="/products">Products</a>
-    <a href="/carts">Cart</a>
-    <a href="#" onclick="logout()">Logout</a>
-</nav>
+
 
 <body>
+
+    <nav>
+        <a href="/products">Products</a>
+        <a href="/carts">Cart</a>
+        <a href="/my-orders">My Orders</a>
+        <a href="#" onclick="logout()">Logout</a>
+    </nav>
 
 <script>
     function logout() {
@@ -65,37 +68,22 @@
         <h3>{{ .Name }}</h3>
         <p>Price: ${{ .Price }}</p>
         <p>Quantity: {{ .Quantity }}</p>
-
-        <!-- JavaScript ile toplam hesaplamayı yapacağız -->
         <p><strong>Total Amount: $<span class="total-amount">{{ .Price }}</span></strong></p>
-
-        <form action="/carts" method="POST">
-            <input type="hidden" name="name" value="{{ .Name }}">
-            <input type="hidden" name="price" value="{{ .Price }}">
-            <input type="hidden" name="quantity" value="{{ .Quantity }}">
-            <input type="hidden" name="product_id" value="{{ .ProductID }}">
-        </form>
     </div>
     {{ end }}
     {{ else }}
-    <p>No products found in your cart.</p>
+    <p>No products found in this cart.</p>
     {{ end }}
 </div>
 
 <script>
-    // Sayfa yüklendiğinde toplam hesaplamayı yapıyoruz.
     window.onload = function() {
         let cartItems = document.querySelectorAll(".cart-card");
 
         cartItems.forEach(function(cartItem) {
-            // Ürün fiyatı ve miktarı
             let price = parseFloat(cartItem.querySelector("p:nth-child(2)").textContent.replace("Price: $", ""));
             let quantity = parseInt(cartItem.querySelector("p:nth-child(3)").textContent.replace("Quantity: ", ""));
-
-            // Toplam tutarı hesapla
             let totalAmount = price * quantity;
-
-            // Total amount kısmına ekle
             cartItem.querySelector(".total-amount").textContent = totalAmount.toFixed(2);
         });
     };

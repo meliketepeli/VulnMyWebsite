@@ -2,9 +2,12 @@ package services
 
 import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"newProject/dto"
-	"newProject/models"
-	"newProject/repository"
+	"context"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"myWebsite-main/dto"
+	"myWebsite-main/models"
+	"myWebsite-main/repository"
 )
 
 // burada once interface olusturuyoruz repo mantıgını dusun
@@ -17,7 +20,9 @@ type DefaultUserService struct {
 type UserService interface {
 	UserInsert(user models.User) (*dto.UserDTO, error)
 	UserGetAll() ([]models.User, error)
-	UserDelete(id primitive.ObjectID) (bool, error)
+	UserDelete(id primitive.ObjectID) (bool, error)	
+	UserLogin(username string, password string) (*models.User, error) // 🔴 NoSQL Injection'a açık giriş fonksiyonu eklendi
+
 }
 
 func (u DefaultUserService) UserInsert(user models.User) (*dto.UserDTO, error) {
@@ -60,6 +65,20 @@ func (u DefaultUserService) UserDelete(id primitive.ObjectID) (bool, error) {
 	}
 	return true, nil
 }
+
+//nosql ınjectıon
+func (u DefaultUserService) UserLogin(username interface{}, password interface{}) (*models.User, error) {
+    // Kullanıcı girdisini olduğu gibi MongoDB sorgusuna aktarıyoruz!
+    filter := bson.M{"username": username, "password": password}
+
+    result, err := u.Repo.FindOne(context.TODO(), filter)
+    if err != nil {
+        return nil, err
+    }
+    return result, nil
+}
+
+
 
 func NewUserService(repo repository.UserRepository) DefaultUserService {
 	return DefaultUserService{Repo: repo}

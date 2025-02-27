@@ -100,8 +100,8 @@
 <body>
 
 <nav>
-  <a href="/my-products?id={{ .RandomID }}">My Products</a>
-  <a href="/my-orders?id={{ .RandomID }}">My Orders</a>
+  <a href="/my-products">My Products</a>  
+  <a href="/my-orders">My Orders</a>
   <a href="#" onclick="logout()">Logout</a>
 </nav>
 
@@ -117,7 +117,7 @@
 
 <div class="container">
   <h1>Add New Product</h1>
-  <form action="/add-products?id={{ .RandomID }}" method="POST" enctype="multipart/form-data" class="add-products">
+  <form action="/add-products" method="POST" enctype="multipart/form-data" class="add-products">
     <div class="form-group">
       <label for="name">Product Name:</label>
       <input type="text" id="name" name="name"required>
@@ -146,10 +146,6 @@
     <button type="button" onclick="addProduct()">Add Product</button>
   </form>
 
-  <!-- Output area for displaying the response directly -->
-  <div id="description-output"></div>
-</div>
-
 <script>
   async function addProduct() {
     const formData = new FormData();
@@ -166,16 +162,17 @@
 
     const response = await fetch('/add-products', {
       method: 'POST',
-      body: formData // İçeriği formData olarak gönderin
+      body: formData 
     });
 
     if (response.ok) {
-      const responseData = await response.text(); // Backend'den gelen HTML yanıtını al
+      const responseData = await response.text(); 
       document.getElementById('description-output').innerHTML = responseData; // Bu şekilde ekleyin
 
      
       alert("Product added successfully!");
-      window.location.href = "/my-products?id={{ .RandomID }}";
+      window.location.href = "/my-products";
+      // bu yukarıdaki satıra bak
     } else {
       alert("Failed to add product.");
     }

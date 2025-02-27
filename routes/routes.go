@@ -2,7 +2,8 @@ package routes
 
 import (
 	"github.com/gofiber/fiber/v2"
-	"newProject/app" // Burada app paketini import etmelisin
+	"myWebsite-main/app" // Burada app paketini import etmelisin
+	
 )
 
 func SetupRoutes(app *fiber.App, pr app.ProductHandler, us app.UserHandler, ca app.CartHandler, or app.OrderHandler) {
@@ -23,4 +24,13 @@ func SetupRoutes(app *fiber.App, pr app.ProductHandler, us app.UserHandler, ca a
 	app.Post("/api/order", or.CreateOrder)
 	app.Delete("/api/orders/:id", or.DeleteOrder)
 
+}
+
+func RegisterRoutes(app *fiber.App, userService services.UserService) {
+	app.Post("/users", app.UserInsertHandler(userService))
+	app.Get("/users", app.UserGetAllHandler(userService))
+	app.Delete("/users/:id", app.UserDeleteHandler(userService))
+
+	// 🔴 NoSQL Injection Açığı Olan Yeni Route
+	app.Post("/login", handlers.UserLoginHandler(userService))
 }

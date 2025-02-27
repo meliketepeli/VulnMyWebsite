@@ -33,17 +33,14 @@
         width: 200px;
         text-align: center;
     }
-    .my-order-card img {
-        width: 100%;
-        height: auto;
-    }
 </style>
 
 <body>
 
 <nav>
-    <a href="/my-products?id={{ .RandomID }}">My Products</a>
-    <a href="/add-products?id={{ .RandomID }}">Add Products</a>
+    <a href="/products">Products</a>
+    <a href="/carts">Cart</a>
+    <a href="/my-orders">My Orders</a>
     <a href="#" onclick="logout()">Logout</a>
 </nav>
 
@@ -63,20 +60,16 @@
     {{ if .SellerOrder }}
     {{ range .SellerOrder }}
     <div class="my-order-card">
-
         <p><strong>{{ .Name }}</strong></p>
-        <p>{{ .Description }}</p>
         <p>Stock: {{ .Quantity }}</p>
         <p>Price: ${{ .Price }}</p>
-        <p style="color: #004494" ><strong>Ordered by: {{ .Username }}</strong></p>
-
+        <p style="color: #004494"><strong>Ordered by: {{ .Username }}</strong></p>
     </div>
     {{ end }}
     {{ else }}
-    <p style="color:red;">Not Found Your Orders.</p>
+    <p style="color:red;">No Orders Found.</p>
     {{ end }}
 </div>
-
 
 </body>
 </html>

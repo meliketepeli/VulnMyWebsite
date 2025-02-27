@@ -7,7 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
-	"newProject/models"
+	"myWebsite-main/models"
 	"time"
 )
 
@@ -25,6 +25,20 @@ type UserRepository interface {
 
 	//delete oluşturuyoruz
 	Delete(id primitive.ObjectID) (bool, error)
+
+	FindOne(ctx context.Context, filter bson.M) (*models.User, error) // 🔴 NoSQL Injection'a açık fonksiyon
+}
+
+type DefaultUserRepository struct {
+	Collection *mongo.Collection
+}
+
+func (r DefaultUserRepository) Insert(user models.User) (bool, error) {
+	_, err := r.Collection.InsertOne(context.TODO(), user)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func (u *UserRepositoryDB) Insert(user models.User) (bool, error) {
@@ -46,6 +60,19 @@ func (u *UserRepositoryDB) Insert(user models.User) (bool, error) {
 	}
 	log.Println("Başarılı şekilde user eklendi eklenen user : ", user)
 	return true, nil
+}
+
+func (r DefaultUserRepository) GetAll() ([]models.User, error) {
+	cursor, err := r.Collection.Find(context.TODO(), bson.M{})
+	if err != nil {
+		return nil, err
+	}
+
+	var users []models.User
+	if err := cursor.All(context.TODO(), &users); err != nil {
+		return nil, err
+	}
+	return users, nil
 }
 
 func (u *UserRepositoryDB) GetAll() ([]models.User, error) {
@@ -102,6 +129,27 @@ func (u *UserRepositoryDB) Delete(id primitive.ObjectID) (bool, error) {
 	}
 	return true, nil
 }
+
+func (r DefaultUserRepository) Delete(id string) (bool, error) {
+	filter := bson.M{"_id": id}
+	result, err := r.Collection.DeleteOne(context.TODO(), filter)
+	if err != nil || result.DeletedCount == 0 {
+		return false, err
+	}
+	return true, nil
+}
+
+// 🔴 NoSQL Injection Açığı Olan Fonksiyon
+func (r DefaultUserRepository) FindOne(ctx context.Context, filter bson.M) (*models.User, error) {
+	var user models.User
+	err := r.Collection.FindOne(ctx, filter).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+
 
 func NewUserRepositoryDB(dbClient *mongo.Collection) *UserRepositoryDB {
 
