@@ -886,16 +886,23 @@ func main() {
 	})
 
 	app.Get("/products", func(c *fiber.Ctx) error {
-		products, err := getProductsFromDB()
+		userID := c.Cookies("userID")
+		role := c.Cookies("role") // Kullanıcının rolünü al
+	
+		products, err := getProductsFromDB() // Ürünleri getir
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": "Failed to fetch products from the database",
 			})
 		}
+	
 		return c.Render("products", fiber.Map{
 			"Products": products,
+			"UserID":   userID,
+			"UserRole": role, // Burada "Role" değil, "UserRole" olarak ekliyoruz!
 		})
 	})
+	
 
 	app.Get("/my-products", getMyProducts) 
 

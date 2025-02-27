@@ -41,14 +41,43 @@
     </style>
 </head>
 
-
 <body>
 
-    <nav>
-        <a href="/products">Products</a>
-        <a href="/carts">Cart</a>
-        <a href="#" onclick="logout()">Logout</a>
-    </nav>
+<nav>
+    <a id="productsLink" href="/products">Products</a>
+    <a id="cartLink" href="/carts">Cart</a>
+    <a href="#" onclick="logout()">Logout</a>
+</nav>
+
+<script>
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    const userID = getCookie("userID");
+    const role = getCookie("role");
+
+    // Kullanıcının ID'sini URL'ye ekle
+    if (userID) {
+        document.getElementById("productsLink").href = `/products?id=${userID}`;
+        document.getElementById("cartLink").href = `/carts?id=${userID}`;
+    }
+
+    // Eğer kullanıcı Role=seller ise Cart linkini navbar'dan kaldır
+    if (role === "seller") {
+        document.getElementById("cartLink").style.display = "none";
+    }
+
+    function logout() {
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/logout';
+        document.body.appendChild(form);
+        form.submit();
+    }
+</script>
 
 <div class="container">
     <h2>Seller Orders</h2>
@@ -67,12 +96,11 @@
             <td>${{ .Price }}</td>
             <td>{{ .Quantity }}</td>
             <td>${{ .Total }}</td>
-
-
         </tr>
         {{ end }}
     </table>
 </div>
+
 </body>
 </html>
 {{ end }}
