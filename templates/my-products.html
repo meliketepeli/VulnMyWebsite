@@ -41,13 +41,29 @@
 </head>
 <body>
 
+<!-- 🔹 Navbar (Dinamik) -->
 <nav>
-    <a href="/add-products">Add Products</a>
-    <a href="/my-orders">My Orders</a>
+    <a id="addProductsLink" href="/add-products">Add Products</a>
+    <a id="myOrdersLink" href="/my-orders">My Orders</a>
     <a href="#" onclick="logout()">Logout</a>
 </nav>
 
 <script>
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    const userID = getCookie("userID");
+    const role = getCookie("role");
+
+    // Kullanıcı giriş yaptıysa, userID'yi linklere ekle
+    if (userID) {
+        document.getElementById("addProductsLink").href = `/add-products?id=${userID}`;
+        document.getElementById("myOrdersLink").href = `/my-orders?id=${userID}`;
+    }
+
     function logout() {
         var form = document.createElement('form');
         form.method = 'POST';

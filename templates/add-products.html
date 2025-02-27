@@ -99,13 +99,32 @@
 </head>
 <body>
 
-<nav>
-  <a href="/my-products">My Products</a>  
-  <a href="/my-orders">My Orders</a>
-  <a href="#" onclick="logout()">Logout</a>
-</nav>
+  <!-- 🔹 Navbar (Dinamik) -->
+  <nav>
+    <a id="myProductsLink" href="/my-products">My Products</a>  
+    <a id="myOrdersLink" href="/my-orders">My Orders</a>
+    <a href="#" onclick="logout()">Logout</a>
+  </nav>
 
 <script>
+  
+  function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+
+  const userID = getCookie("userID");
+
+  const role = getCookie("role");
+
+
+  // Eğer giriş yapılmışsa, userID'yi linklere ekle
+  if (userID) {
+      document.getElementById("myProductsLink").href = `/my-products?id=${userID}`;
+      document.getElementById("myOrdersLink").href = `/my-orders?id=${userID}`;
+  }
+
   function logout() {
     var form = document.createElement('form');
     form.method = 'POST';
@@ -120,12 +139,12 @@
   <form action="/add-products" method="POST" enctype="multipart/form-data" class="add-products">
     <div class="form-group">
       <label for="name">Product Name:</label>
-      <input type="text" id="name" name="name"required>
+      <input type="text" id="name" name="name" required>
     </div>
 
     <div class="form-group">
       <label for="description">Description:</label>
-      <textarea id="description"name="description"required></textarea>
+      <textarea id="description" name="description" required></textarea>
     </div>
 
     <div class="form-group">
@@ -135,7 +154,7 @@
 
     <div class="form-group">
       <label for="quantity">Quantity:</label>
-      <input type="number" id="quantity"  name="quantity"required>
+      <input type="number" id="quantity" name="quantity" required>
     </div>
 
     <div class="form-group">
@@ -151,7 +170,7 @@
     const formData = new FormData();
     formData.append("name", document.getElementById('name').value);
     const description = document.getElementById('description').value;
-    formData.append("description", description); // Doğrudan ekleyin
+    formData.append("description", description);
     formData.append("price", document.getElementById('price').value);
     formData.append("quantity", document.getElementById('quantity').value);
 
@@ -167,16 +186,25 @@
 
     if (response.ok) {
       const responseData = await response.text(); 
-      document.getElementById('description-output').innerHTML = responseData; // Bu şekilde ekleyin
+      document.getElementById('description-output').innerHTML = responseData;
 
-     
-      alert("Product added successfully!");
-      window.location.href = "/my-products";
-      // bu yukarıdaki satıra bak
+      const userID = getCookie("userID");  
+      if (userID) {
+          window.location.href = `/my-products?id=${userID}`;  
+      } else {
+          window.location.href = "/my-products";  
+      }
     } else {
-      alert("Failed to add product.");
+        alert("Failed to add product.");
     }
   }
+
+  function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+
 </script>
 
 </body>

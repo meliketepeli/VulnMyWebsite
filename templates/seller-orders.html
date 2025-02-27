@@ -3,48 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <title>My Orders</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        nav {
+            background-color: #0056b3;
+            color: white;
+            padding: 25px;
+        }
+        nav a {
+            color: white;
+            text-decoration: none;
+            margin-right: 30px;
+        }
+
+        .my-order-container {
+            padding: 3%;
+        }
+        .my-order-card {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px;
+            display: inline-block;
+            width: 200px;
+            text-align: center;
+        }
+    </style>
 </head>
-
-<style>
-    body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 0;
-    }
-    nav {
-        background-color: #0056b3;
-        color: white;
-        padding: 25px;
-    }
-    nav a {
-        color: white;
-        text-decoration: none;
-        margin-right: 30px;
-    }
-
-    .my-order-container {
-        padding: 3%;
-    }
-    .my-order-card {
-        border: 1px solid #ccc;
-        padding: 10px;
-        margin: 10px;
-        display: inline-block;
-        width: 200px;
-        text-align: center;
-    }
-</style>
 
 <body>
 
+<!-- 🔹 Navbar (Dinamik) -->
 <nav>
-    <a href="/products">Products</a>
-    <a href="/carts">Cart</a>
-    <a href="/my-orders">My Orders</a>
+    <a id="productsLink" href="/my-products">Products</a>
+    <a id="myOrdersLink" href="/my-orders">My Orders</a>
     <a href="#" onclick="logout()">Logout</a>
 </nav>
 
 <script>
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+    }
+
+    const userID = getCookie("userID");
+    const role = getCookie("role");
+
+    // Kullanıcı giriş yaptıysa, userID'yi linklere ekle
+    if (userID) {
+        document.getElementById("myproductsLink").href = `/my-products?id=${userID}`;
+        document.getElementById("myOrdersLink").href = `/my-orders?id=${userID}`;
+    }
+
+
     function logout() {
         var form = document.createElement('form');
         form.method = 'POST';

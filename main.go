@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"time"
 	
+	
 )
 
 var jwtSecret = []byte("supersecretkey")
@@ -832,6 +833,24 @@ func main() {
 	app.Use(logger.New())
 	app.Use(cors.New())
 
+	app.Use(func(c *fiber.Ctx) error {
+		path := c.Path()         // Kullanıcının gitmek istediği URL
+		userID := c.Cookies("userID") // Kullanıcının çerezinden userID'yi al
+	
+		// Eğer kullanıcı giriş yapmamışsa veya giriş sayfasındaysa, yönlendirme yapma
+		if userID == "" || path == "/" || path == "/login" {
+			return c.Next()
+		}
+	
+		// Eğer URL zaten `?id=` parametresini içeriyorsa, değiştirme
+		if c.Query("id") == "" {
+			newURL := fmt.Sprintf("%s?id=%s", path, userID)
+			return c.Redirect(newURL, fiber.StatusFound) // Kullanıcıyı yeni URL'ye yönlendir
+		}
+	
+		return c.Next()
+	})
+	
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.Render("login", nil)
