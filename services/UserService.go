@@ -16,7 +16,7 @@ type DefaultUserService struct {
 	Repo repository.UserRepository
 }
 
-// burası UserRepository deki interface i kullanabilelim diye yazdık
+// burası UserRepository deki interface i kullanabilelim diye yazdık 
 type UserService interface {
 	UserInsert(user models.User) (*dto.UserDTO, error)
 	UserGetAll() ([]models.User, error)
@@ -68,7 +68,7 @@ func (u DefaultUserService) UserDelete(id primitive.ObjectID) (bool, error) {
 
 //nosql ınjectıon
 func (u DefaultUserService) UserLogin(username interface{}, password interface{}) (*models.User, error) {
-    // Kullanıcı girdisini olduğu gibi MongoDB sorgusuna aktarıyoruz!
+    // Kullanıcı girdisini olduğu gibi MongoDB sorgusuna aktarma
     filter := bson.M{"username": username, "password": password}
 
     result, err := u.Repo.FindOne(context.TODO(), filter)

@@ -5,8 +5,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"net/http"
-	"newProject/models"
-	"newProject/services"
+	"myWebsite-main/models"
+	"myWebsite-main/services"
 )
 
 type ProductHandler struct {

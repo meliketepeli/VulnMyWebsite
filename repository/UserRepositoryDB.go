@@ -25,8 +25,9 @@ type UserRepository interface {
 
 	//delete oluşturuyoruz
 	Delete(id primitive.ObjectID) (bool, error)
+	
 
-	FindOne(ctx context.Context, filter bson.M) (*models.User, error) // 🔴 NoSQL Injection'a açık fonksiyon
+	FindOne(ctx context.Context, filter bson.M) (*models.User, error) // 🔴 NoSQL Injection
 }
 
 type DefaultUserRepository struct {
@@ -139,7 +140,7 @@ func (r DefaultUserRepository) Delete(id string) (bool, error) {
 	return true, nil
 }
 
-// 🔴 NoSQL Injection Açığı Olan Fonksiyon
+// 🔴 NoSQL Injection 
 func (r DefaultUserRepository) FindOne(ctx context.Context, filter bson.M) (*models.User, error) {
 	var user models.User
 	err := r.Collection.FindOne(ctx, filter).Decode(&user)

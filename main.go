@@ -18,13 +18,59 @@ import (
 	"log"
 	"newProject/configs"
 	"strconv"
-	"time"
-	
-	
+	"time"	
 )
+
+var client *mongo.Client
 
 var jwtSecret = []byte("supersecretkey")
 
+func registerPageHandler(c *fiber.Ctx) error {
+
+	return c.SendFile("templates/register.html") // register.html dosyasını döndür
+
+}
+func registerHandler(c *fiber.Ctx) error {
+	var user User
+
+	if err := c.BodyParser(&user); err != nil {
+		return c.Status(fiber.StatusBadRequest).SendString("Invalid input format")
+	}
+
+	collection := client.Database("myWebsiteAPI").Collection("users")
+	
+	var existingUser User
+	err := collection.FindOne(context.TODO(), bson.M{"Username": user.Username}).Decode(&existingUser)
+
+	if err == nil {
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "This user already exists. Please log in!"})
+	}
+
+	// Eğer hata `mongo.ErrNoDocuments` değilse, başka bir hata var demektir.
+	if err != mongo.ErrNoDocuments {
+		return c.Status(fiber.StatusInternalServerError).SendString("Database error: " + err.Error())
+	}
+
+	// 🚨 Şifre **hashlenmeden** düz metin olarak kaydediliyor!
+	_, err = collection.InsertOne(context.TODO(), bson.M{
+		"Username": user.Username,
+		"Role":     user.Role,
+		"Password": user.Password, // Şifre düz metin olarak kaydedildi ❗
+	})
+
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Failed to register user: " + err.Error())
+	}
+
+	// Kullanıcı çerezini oluştur ve giriş sayfasına yönlendir
+	c.Cookie(&fiber.Cookie{
+		Name:     "Username",
+		Value:    user.Username,
+		Expires:  time.Now().Add(24 * time.Hour),
+	})
+
+	return c.Redirect("/login")
+}
 func loginHandler(c *fiber.Ctx) error {
 	var reqBody map[string]interface{}
 
@@ -32,61 +78,68 @@ func loginHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request format"})
 	}
 
-	// **Eski çerezleri temizle**
-	c.Cookie(&fiber.Cookie{
-		Name:     "userID",
-		Value:    "",
-		Expires:  time.Now().Add(-1 * time.Hour), // Anında sil
-	})
+// **Eski çerezleri temizle**
+c.Cookie(&fiber.Cookie{
+	Name:     "userID",
+	Value:    "",
+	Expires:  time.Now().Add(-1 * time.Hour), // Anında sil
+})
 
-	c.Cookie(&fiber.Cookie{
-		Name:     "Username",
-		Value:    "",
-		Expires:  time.Now().Add(-1 * time.Hour), // Anında sil
-	})
+c.Cookie(&fiber.Cookie{
+	Name:     "Username",
+	Value:    "",
+	Expires:  time.Now().Add(-1 * time.Hour), // Anında sil
+})
 
-	// MongoDB case-sensitive olduğu için "Username" ve "Password" doğru olmalı
-	query := bson.M{
-		"Username": reqBody["username"],
-		"Password": reqBody["password"],
-	}
+// MongoDB case-sensitive olduğu için "Username" ve "Password" doğru olmalı
+query := bson.M{
+	"Username": reqBody["username"],
+	"Password": reqBody["password"],
+}
 
-	// MongoDB'ye gönderilecek sorguyu logla
-	log.Printf("MongoDB Query Attempt: %+v", query)
+// MongoDB'ye gönderilecek sorguyu logla
+log.Printf("MongoDB Query Attempt: %+v", query)
 
-	client := configs.DB
-	collection := configs.GetCollection(client, "users")
+client := configs.DB
+collection := configs.GetCollection(client, "users")
 
-	var user struct {
-		ID       primitive.ObjectID `json:"id" bson:"_id"`
-		Username string             `json:"username" bson:"Username"`
-		Password string             `json:"password" bson:"Password"`
-		Role     string             `json:"role" bson:"Role"`
-	}
 
-	// **NoSQL Injection açığını test etmek için direkt query kullanıyoruz**
-	err := collection.FindOne(context.TODO(), query).Decode(&user)
+var user struct {
+	ID       primitive.ObjectID `json:"id" bson:"_id"`
+	Username string             `json:"username" bson:"Username"`
+	Password string             `json:"password" bson:"Password"`
+	Role     string             `json:"role" bson:"Role"`
+}
 
-	if err != nil {
-		log.Printf("Login failed: %v", err)
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
-	}
+// **NoSQL Injection açığını test etmek için direkt query kullanıyoruz**
+err := collection.FindOne(context.TODO(), query).Decode(&user)
 
-	// **Yeni çerezleri oluştur**
+
+if err != nil {
+	log.Printf("Login failed: %v", err)
+	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
+}
+
+	// ✅ Kullanıcıyı giriş yapmış olarak belirle (ÇEREZLERİ DÜZGÜN AYARLA)
 	c.Cookie(&fiber.Cookie{
 		Name:     "userID",
 		Value:    user.ID.Hex(),
 		Expires:  time.Now().Add(24 * time.Hour),
+		// HTTPOnly: false, // False yaparak JS erişimine izin verdim
+		
 	})
 
 	c.Cookie(&fiber.Cookie{
 		Name:     "Username",
 		Value:    user.Username,
 		Expires:  time.Now().Add(24 * time.Hour),
+		// HTTPOnly: false, // False yaparak JS erişimine izin vermiş oldum
+		
 	})
 
 	log.Printf("Login successful: username=%s", user.Username)
 
+	// Kullanıcının rolüne göre yönlendirme yap
 	if user.Role == "user" {
 		return c.Redirect("/products?id=" + user.ID.Hex())
 	} else if user.Role == "seller" {
@@ -98,23 +151,43 @@ func loginHandler(c *fiber.Ctx) error {
     c.Locals("userID", user.ID)  // Kullanıcı ID'sini oturumda saklıyoruz
 
 	return c.JSON(fiber.Map{
-        
-        "role":    user.Role,
-        "message": "Login successful",
-    })
-	
-
+		"role":    user.Role,
+		"message": "Login successful",
+	})
 }
 
-
+// 📌 **İlk olarak login.html göster**
+func loginPageHandler(c *fiber.Ctx) error {
+	return c.SendFile("templates/login.html")
+}
 
 func AuthMiddleware(c *fiber.Ctx) error {
-	userID := c.Cookies("userID") // 🍪 Çerezi oku
+	userID := c.Cookies("userID") 
 
 	if userID == "" {
 		log.Println("Unauthorized - No userID in cookie")
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+		return c.Redirect("/login")
 	}
+	/*
+
+	// ✅ Kullanıcının kimliğini doğrulamak için MongoDB'yi kontrol et
+	collection := client.Database("myWebsiteAPI").Collection("users")
+
+	var user User
+	objID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		log.Println("Unauthorized - Invalid userID format")
+		return c.Redirect("/login")
+	}
+
+	err = collection.FindOne(context.TODO(), bson.M{"_id": objID}).Decode(&user)
+
+	if err != nil {
+		log.Println("Unauthorized - Invalid userID in cookie")
+		return c.Redirect("/login")
+	}
+		*/
+	
 
 	c.Locals("userID", userID)
 	return c.Next()
@@ -163,7 +236,7 @@ func logoutHandler(c *fiber.Ctx) error {
 		Name:     "userID",
 		Value:    "",
 		Expires:  time.Now().Add(-1 * time.Hour),
-		// HTTPOnly: true,
+		// HTTPOnly: true,  xss koruması saglıyor, ondan kaldırdım
 	})
 
 	c.Cookie(&fiber.Cookie{
@@ -189,22 +262,18 @@ type Cart struct {
 }
 
 func getCartsFromDB(userID string) ([]Cart, error) {
-	// userID boş mu kontrol et
 	if userID == "" {
 		return nil, fmt.Errorf("userID is required")
 	}
 
-	// userID'yi ObjectID'ye çevir
 	uid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid userID format")
 	}
 
-	// Veritabanı bağlantısı
 	client := configs.DB
 	collection := configs.GetCollection(client, "carts")
 
-	// Kullanıcıya ait sepet öğelerini filtrele
 	filter := bson.M{"user_id": uid}
 	cursor, err := collection.Find(context.TODO(), filter)
 	if err != nil {
@@ -212,7 +281,6 @@ func getCartsFromDB(userID string) ([]Cart, error) {
 	}
 	defer cursor.Close(context.TODO())
 
-	// Sepet öğelerini decode et
 	var carts []Cart
 	if err := cursor.All(context.TODO(), &carts); err != nil {
 		return nil, fmt.Errorf("failed to decode cart items: %v", err)
@@ -229,7 +297,6 @@ func getCart(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	// Kullanıcıya ait sepet öğelerini çek
 	carts, err := getCartsFromDB(userID)
 	if err != nil {
 		log.Printf("Failed to fetch cart items: %v", err)
@@ -242,106 +309,119 @@ func getCart(c *fiber.Ctx) error {
 }
 
 func addToCart(c *fiber.Ctx) error {
-	userID := c.Cookies("userID")
-	log.Printf("user id from cookie: %v", userID)
+    userID := c.Cookies("userID")
+    log.Printf("User ID from cookie: %v", userID)
 
-	if userID == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
-	}
+    if userID == "" {
+        return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+    }
 
-	uid, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		log.Printf("Invalid user ID from cookie: %s", userID)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid User ID format!"})
-	}
+    uid, err := primitive.ObjectIDFromHex(userID)
+    if err != nil {
+        log.Printf("Invalid user ID from cookie: %s", userID)
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid User ID format!"})
+    }
 
-	productID := c.FormValue("product_id")
-	log.Printf("Received product_id from form: %s", productID)
-	oid, err := primitive.ObjectIDFromHex(productID)
-	if err != nil {
-		log.Printf("Invalid product ID: %s", productID)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid product ID"})
-	}
+    // **FORM VERİLERİNİ AL VE KONTROL ET**
+    productID := c.FormValue("product_id")
+    log.Printf("✅ Extracted product_id: %s", productID)
 
-	client := configs.DB
-	collection := configs.GetCollection(client, "carts")
-	cartsCollection := configs.GetCollection(client, "carts")
-	productCollection := configs.GetCollection(client, "products")
+    if productID == "" {
+        log.Println("🚨 HATA: Formdan gelen 'product_id' boş!")
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Product ID is missing!"})
+    }
 
-	var product struct {
-		Name     string  `json:"name" bson:"name"`
-		Price    float64 `json:"price" bson:"price"`
-		SellerID string  `json:"sellerId" bson:"sellerId"` // SellerID'yi al
+    oid, err := primitive.ObjectIDFromHex(productID)
+    if err != nil {
+        log.Printf("Invalid product ID format: %s", productID)
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid product ID"})
+    }
 
-	}
-	err = productCollection.FindOne(context.TODO(), bson.M{"_id": oid}).Decode(&product)
-	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
-	}
+    client := configs.DB
+    cartCollection := configs.GetCollection(client, "carts")
+    productCollection := configs.GetCollection(client, "products")
+    ordersCollection := configs.GetCollection(client, "orders")
+    sellerOrdersCollection := configs.GetCollection(client, "seller-orders")
 
-	// Kullanıcı ve ürün ID'sine göre sepeti kontrol et
-	var existingCartItem Cart
-	err = collection.FindOne(context.TODO(), bson.M{"product_id": oid, "user_id": uid}).Decode(&existingCartItem)
+    var product struct {
+        Name     string  `json:"name" bson:"name"`
+        Price    float64 `json:"price" bson:"price"`
+        SellerID string  `json:"sellerId" bson:"sellerId"`
+    }
 
-	if err == nil {
-		// Eğer ürün sepette varsa, miktarı 1 artır
-		update := bson.M{"$inc": bson.M{"quantity": 1}}
-		_, err = collection.UpdateOne(context.TODO(), bson.M{"product_id": oid, "user_id": uid}, update)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update cart item"})
-		}
-	} else {
-		// Eğer ürün sepette yoksa, yeni ürün ekle
-		newCartItem := Cart{
-			Id:        primitive.NewObjectID(),
-			Username:  c.Cookies("Username"),
-			UserID:    uid,
-			Quantity:  1,
-			Name:      product.Name,
-			Price:     product.Price,
-			ProductID: oid,
-		}
+    err = productCollection.FindOne(context.TODO(), bson.M{"_id": oid}).Decode(&product)
+    if err != nil {
+        return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Product not found"})
+    }
 
-		_, err = cartsCollection.InsertOne(context.TODO(), newCartItem)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add item to cart"})
-		}
-	}
+    filter := bson.M{"product_id": oid, "user_id": uid}
+    update := bson.M{"$inc": bson.M{"quantity": 1}}
 
-	// Siparişi `orders` koleksiyonuna ekle
-	order := Order{
-		Id:        primitive.NewObjectID(),
-		Username:  c.Cookies("Username"),
-		Name:      product.Name,
-		Price:     product.Price,
-		Quantity:  1, // Sepete eklenen miktar
-		ProductID: oid,
-		UserID:    uid,
-	}
-	ordersCollection := configs.GetCollection(client, "orders")
-	_, err = ordersCollection.InsertOne(context.TODO(), order)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add order"})
-	}
+    result, err := cartCollection.UpdateOne(context.TODO(), filter, update)
 
-	// SellerOrder'ı `seller-orders` koleksiyonuna ekle
-	sellerOrder := SellerOrder{
-		Id:        primitive.NewObjectID(),
-		Username:  c.Cookies("Username"),
-		Name:      product.Name,
-		Price:     product.Price,
-		Quantity:  1,
-		ProductID: oid,
-		UserID:    uid,
-	}
-	sellerOrdersCollection := configs.GetCollection(client, "seller-orders")
-	_, err = sellerOrdersCollection.InsertOne(context.TODO(), sellerOrder)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add seller order"})
-	}
+    if err != nil {
+        log.Println("🚨 Sepetteki ürün güncellenirken hata oluştu:", err)
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update cart item"})
+    }
 
-	return c.Redirect("/carts?id=" + userID)
+    if result.MatchedCount == 0 {
+        log.Println("⚠️ Ürün sepette bulunamadı, yeni olarak ekleniyor...")
+
+        newCartItem := Cart{
+            Id:        primitive.NewObjectID(),
+            Username:  c.Cookies("Username"),
+            UserID:    uid,
+            Quantity:  1,
+            Name:      product.Name,
+            Price:     product.Price,
+            ProductID: oid,
+        }
+
+        _, err = cartCollection.InsertOne(context.TODO(), newCartItem)
+        if err != nil {
+            return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add item to cart"})
+        }
+    } else {
+        log.Println("✅ Ürün sepette bulundu, miktar artırıldı.")
+    }
+
+    // **Orders Koleksiyonuna Ekle**
+    order := Order{
+        Id:        primitive.NewObjectID(),
+        Username:  c.Cookies("Username"),
+        Name:      product.Name,
+        Price:     product.Price,
+        Quantity:  1, 
+        ProductID: oid,
+        UserID:    uid,
+    }
+
+    _, err = ordersCollection.InsertOne(context.TODO(), order)
+    if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add order"})
+    }
+
+    // **Seller Orders Koleksiyonuna Ekle**
+    sellerOrder := SellerOrder{
+        Id:        primitive.NewObjectID(),
+        Username:  c.Cookies("Username"),
+        Name:      product.Name,
+        Price:     product.Price,
+        Quantity:  1,
+        ProductID: oid,
+        UserID:    uid,
+    }
+
+    _, err = sellerOrdersCollection.InsertOne(context.TODO(), sellerOrder)
+    if err != nil {
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add seller order"})
+    }
+
+    log.Println("✅ Ürün sepete başarıyla eklendi veya güncellendi! Kullanıcı yönlendiriliyor...")
+
+    return c.Redirect("/carts?id=" + userID)
 }
+
 
 type Product struct {
 	ID          string  `json:"id" bson:"_id"`
@@ -368,12 +448,11 @@ type SellerProduct struct {
 
 func getSellerProductsFromDB(userID string) ([]SellerProduct, error) {
 
-	// userID boş mu kontrol et
+
 	if userID == "" {
 		return nil, fmt.Errorf("userID is required")
 	}
 
-	// userID'yi ObjectID'ye çevir
 	uid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid userID format")
@@ -420,6 +499,9 @@ func getMyProducts(c *fiber.Ctx) error {
 		"SellerProducts": sellerProducts,
 	})
 }
+
+
+
 func addProduct(c *fiber.Ctx) error {
 	userID := c.Cookies("userID")
 	log.Printf("User ID from cookie: %v", userID)
@@ -450,10 +532,9 @@ func addProduct(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "Permission denied"})
 	}
 
-	// ✅ Ürün için ObjectID oluştur
 	productID := primitive.NewObjectID()
 
-	// Dosya yükleme işlemi
+	// Dosya yükleme kısmı
 	file, err := c.FormFile("image")
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "No file uploaded"})
@@ -465,7 +546,7 @@ func addProduct(c *fiber.Ctx) error {
 	}
 	defer fileData.Close()
 
-	// GridFS'e dosya yükleme
+	// GridFS'e dosya yükleme buna bak
 	bucket, err := gridfs.NewBucket(client.Database("myWebsiteAPI"))
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to create GridFS bucket"})
@@ -484,11 +565,20 @@ func addProduct(c *fiber.Ctx) error {
 	imageID := uploadStream.FileID.(primitive.ObjectID)
 	imageURL := fmt.Sprintf("/file/%s", imageID.Hex())
 
-	// Form verilerini al
+
+	log.Println("🚀 [DEBUG] addProduct fonksiyonu çağrıldı!")
+	// Form verileri 
 	name := c.FormValue("name")
 	description := c.FormValue("description")
 	priceStr := c.FormValue("price")
 	quantityStr := c.FormValue("quantity")
+
+	if name == "" || description == "" || priceStr == "" || quantityStr == "" {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing required fields"})
+    }
+
+	log.Printf("📦 Ürün Ekleniyor: Name: %s, Description: %s, Price: %s, Quantity: %s", name, description, priceStr, quantityStr)
+
 
 	price, err := strconv.ParseFloat(priceStr, 64)
 	if err != nil {
@@ -500,7 +590,6 @@ func addProduct(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid quantity value"})
 	}
 
-	// ✅ SellerProducts koleksiyonuna eklenmek üzere nesne oluştur
 	sellerProduct := SellerProduct{
 		ID:          primitive.NewObjectID(),
 		Name:        name,
@@ -509,36 +598,34 @@ func addProduct(c *fiber.Ctx) error {
 		Quantity:    quantity,
 		ImageURL:    imageURL,
 		UserID:      uid,
-		ProductID:   productID, // ✅ SellerProducts içinde product_id olarak saklanacak
+		ProductID:   productID, 
 	}
 
-	// ✅ Products koleksiyonuna eklenmek üzere nesne oluştur (_id = productID)
 	product := bson.M{
-		"_id":         productID, // ✅ Aynı `productID` kullanılıyor
+		"_id":         productID, 
 		"name":        name,
 		"description": description,
 		"price":       price,
 		"quantity":    quantity,
 		"imageURL":    imageURL,
-		"sellerId":    userID, // ✅ Seller ID olarak userID ekleniyor
+		"sellerId":    userID, 
 
 	}
 
-	// ✅ SellerProducts koleksiyonuna ekle
 	sellerCollection := configs.GetCollection(client, "seller-products")
 	_, err = sellerCollection.InsertOne(c.Context(), sellerProduct)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add product to seller-products"})
 	}
 
-	// ✅ Products koleksiyonuna ekle
 	productCollection := configs.GetCollection(client, "products")
 	_, err = productCollection.InsertOne(c.Context(), product)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add product to products"})
 	}
 
-	// ✅ `getSellerProductsFromDB` çağrısına string parametre ekle
+	log.Println("✅ Ürün başarıyla eklendi!")
+
 	getSellerProductsFromDB(uid.Hex())
 
 	c.Set("Content-Type", "text/html")
@@ -616,10 +703,9 @@ func getUsersFromDB() ([]User, error) {
 	return users, nil
 }
 func getSellerOrdersFromDB(c *fiber.Ctx) error {
-	// Kullanıcıyı al
+	
 	username := c.Locals("username").(string)
 
-	// Kullanıcıyı veritabanından çek
 	client := configs.DB
 	usersCollection := configs.GetCollection(client, "users")
 
@@ -629,7 +715,6 @@ func getSellerOrdersFromDB(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Seller not found"})
 	}
 
-	// Seller'a ait ürünleri al
 	productsCollection := configs.GetCollection(client, "products")
 	cursor, err := productsCollection.Find(context.TODO(), bson.M{"seller_id": seller.Id})
 	if err != nil {
@@ -642,7 +727,6 @@ func getSellerOrdersFromDB(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to decode products"})
 	}
 
-	// Ürün ID'leri listesi oluştur
 	var productIDs []primitive.ObjectID
 	for _, product := range sellerProducts {
 		oid, err := primitive.ObjectIDFromHex(product.ID) // product.ID'yi primitive.ObjectID'ye çevirin
@@ -652,7 +736,6 @@ func getSellerOrdersFromDB(c *fiber.Ctx) error {
 		productIDs = append(productIDs, oid)
 	}
 
-	// Siparişleri getir
 	ordersCollection := configs.GetCollection(client, "orders")
 	filter := bson.M{"product_id": bson.M{"$in": productIDs}}
 	orderCursor, err := ordersCollection.Find(context.TODO(), filter)
@@ -668,7 +751,6 @@ func getSellerOrdersFromDB(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to decode orders"})
 		}
 
-		// SellerOrder nesnesine dönüştürme
 		sellerOrders = append(sellerOrders, SellerOrder{
 			Id:        order.Id,
 			Username:  order.Username,
@@ -679,7 +761,6 @@ func getSellerOrdersFromDB(c *fiber.Ctx) error {
 		})
 	}
 
-	// HTML sayfasına siparişleri render et
 	return c.Render("order", fiber.Map{
 		"SellerOrder": sellerOrders,
 	})
@@ -822,6 +903,26 @@ func getCartItems(c *fiber.Ctx) error {
 var productCollection *mongo.Collection
 var cartCollection *mongo.Collection
 
+func connectMongoDB() {
+	// ✅ **MongoDB bağlantısını oluştur**
+	var err error
+	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+
+	client, err = mongo.Connect(context.TODO(), clientOptions)
+	if err != nil {
+		log.Fatal("MongoDB bağlantısı başarısız! Hata: ", err)
+	}
+
+	// ✅ **MongoDB bağlantısının çalıştığını kontrol et**
+	err = client.Ping(context.TODO(), nil)
+	if err != nil {
+		log.Fatal("MongoDB çalışmıyor! Lütfen kontrol et.", err)
+	}
+
+	log.Println("MongoDB bağlantısı başarılı!")
+}
+
+
 func main() {
 
 	engine := html.New("./templates", ".html")
@@ -830,6 +931,8 @@ func main() {
 		Views: engine,
 	})
 
+	connectMongoDB()
+
 	app.Use(logger.New())
 	app.Use(cors.New())
 
@@ -837,12 +940,10 @@ func main() {
 		path := c.Path()         // Kullanıcının gitmek istediği URL
 		userID := c.Cookies("userID") // Kullanıcının çerezinden userID'yi al
 	
-		// Eğer kullanıcı giriş yapmamışsa veya giriş sayfasındaysa, yönlendirme yapma
-		if userID == "" || path == "/" || path == "/login" {
+		if userID == "" || path == "/" || path == "/login"  || path == "/logout" {
 			return c.Next()
 		}
 	
-		// Eğer URL zaten `?id=` parametresini içeriyorsa, değiştirme
 		if c.Query("id") == "" {
 			newURL := fmt.Sprintf("%s?id=%s", path, userID)
 			return c.Redirect(newURL, fiber.StatusFound) // Kullanıcıyı yeni URL'ye yönlendir
@@ -850,13 +951,29 @@ func main() {
 	
 		return c.Next()
 	})
-	
 
+	app.Static("/", "templates")
+
+
+// 📌 İlk olarak login.html göster
+app.Get("/", loginPageHandler)
+
+// 📌 Kullanıcı işlemleri
+app.Get("/login", loginPageHandler)
+app.Post("/login", loginHandler)
+app.Get("/register", registerPageHandler)
+app.Post("/register", registerHandler)
+
+
+	/*
 	app.Get("/", func(c *fiber.Ctx) error {
-		return c.Render("login", nil)
-	})
-	
-	app.Post("/login", loginHandler)
+		return c.Render("register", nil) 
+	}) */
+
+	/*
+	app.Get("/register", func(c *fiber.Ctx) error {
+		return c.Render("register", nil) 
+	}) */
 
 	app.Post("/cart", JWTMiddleware(), addToCart)
 	app.Get("/cart", JWTMiddleware(), getUserCart)
@@ -906,16 +1023,6 @@ func main() {
 
 	app.Get("/my-products", getMyProducts) 
 
-
-	/*
-		app.Get("/my-products", func(c *fiber.Ctx) error {
-			products, err := getSellerProductsFromDB() // bu kısım sıkıntılı
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch products"})
-			}
-			return c.Render("my-products", fiber.Map{"SellerProducts": products})
-		}) */
-
 	app.Get("/my-products", func(c *fiber.Ctx) error {
 		return getMyProducts(c)
 	})
@@ -948,25 +1055,23 @@ func main() {
 
 	app.Post("/remove-from-cart", removeFromCart)
 
-
-	/*
-		app.Get("/api/carts", func(c *fiber.Ctx) error {
-			cart, err := getCartsFromDB()
-			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": "Failed to fetch CARTS from the database",
-				})
-			}
-			return c.JSON(cart)
-		}) */
-
 	client, _ := mongo.Connect(context.TODO(), options.Client().ApplyURI("mongodb://localhost:27017")) // ?????
 
 	productCollection = client.Database("myWebsiteAPI").Collection("products")
 	cartCollection = client.Database("myWebsiteAPI").Collection("cart")
 
+
+	
 	app.Post("/add-to-cart", addToCart)
-	app.Get("/carts", getCart) // getCartProducts idi simdi getCart oldu
+
+	//get i sonradan ben ekledim
+	// Eğer yanlışlıkla GET isteği yapılırsa, kullanıcının products sayfasına yönlendirilmesini sağlarız.
+app.Get("/add-to-cart", func(c *fiber.Ctx) error {
+    log.Println("🚨 UYARI: GET /add-to-cart çağrıldı! Yanlış yönlendirme olabilir.")
+    return c.Redirect("/products")
+})
+
+	app.Get("/carts", getCart)
 
 
 	app.Get("/orders", func(c *fiber.Ctx) error {

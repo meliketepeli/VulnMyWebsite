@@ -5,8 +5,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"net/http"
-	"newProject/models"
-	"newProject/services"
+	"myWebsite-main/models"
+	"myWebsite-main/services"
 )
 
 type OrderHandler struct {
@@ -60,7 +60,7 @@ func (h OrderHandler) DeleteOrder(c *fiber.Ctx) error {
 
 	if err != nil || result == false {
 
-		//kendi modelimizi oluşturmak gibi düşünebiliriz (buna bak bence)
+		//kendi modelimizi oluşturmak gibi düşünebiliriz 
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"State": false})
 	}
 
