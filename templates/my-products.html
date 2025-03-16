@@ -73,11 +73,26 @@
     .my-product-card p strong {
       color: #333;
     }
-    .update-form {
+    .update-form, .remove-form {
       display: inline;
+      margin-top: 10px;
     }
-    .update-form input[type="number"] {
-      width: 80px;
+    .update-form input[type="number"],
+    .remove-form button {
+      margin-top: 5px;
+    }
+    .remove-form button {
+      background-color: #dc3545;
+      border: none;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background-color 0.2s;
+    }
+    .remove-form button:hover {
+      background-color: #c82333;
     }
     .no-products {
       color: red;
@@ -126,6 +141,11 @@
               <button type="submit">Update</button>
             </form>
           </p>
+          <!-- Remove Product Form -->
+          <form action="/remove-product?id={{$.RandomID}}" method="post" class="remove-form">
+            <input type="hidden" name="productID" value="{{ .ProductID.Hex }}" />
+            <button type="submit">Remove Product</button>
+          </form>
         </div>
         {{ end }}
       </div>

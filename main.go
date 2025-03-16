@@ -533,7 +533,6 @@ func addProduct(c *fiber.Ctx) error {
 }
 
 
-
 func getMyProducts(c *fiber.Ctx) error {
 	log.Println(">>> [getMyProducts] =>", c.Method(), c.OriginalURL())
 	userID := c.Cookies("userID")
@@ -838,6 +837,31 @@ func addToCart(c *fiber.Ctx) error {
 	log.Println("    => Inserted new doc in 'seller-orders'")
 	return c.Redirect("/carts")
 }
+// Yeni removeProduct handler'ı:
+func removeProduct(c *fiber.Ctx) error {
+	productIDStr := c.FormValue("productID")
+	if productIDStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Missing productID"})
+	}
+	prodID, err := primitive.ObjectIDFromHex(productIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid productID"})
+	}
+	sellerProdColl := getCollection("seller-products")
+	productsColl := getCollection("products")
+	
+	// seller-products koleksiyonundan silme işlemi:
+	if _, err := sellerProdColl.DeleteOne(context.TODO(), bson.M{"product_id": prodID}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to remove product from seller-products"})
+	}
+	
+	// products koleksiyonundan silme işlemi:
+	if _, err := productsColl.DeleteOne(context.TODO(), bson.M{"_id": prodID}); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to remove product from products"})
+	}
+	return c.Redirect("/my-products")
+}
+
 
 func removeFromCart(c *fiber.Ctx) error {
 	log.Println(">>> [removeFromCart] => POST /remove-from-cart")
@@ -1166,6 +1190,9 @@ func main() {
 		return c.Render("add-products", nil)
 	})
 	app.Post("/add-products", addProduct)
+
+	app.Post("/remove-product", removeProduct)
+
 	app.All("/my-products", getMyProducts)
 	app.Get("/products", getProducts)
 	app.Get("/orders", getOrders)
