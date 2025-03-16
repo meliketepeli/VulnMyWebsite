@@ -21,6 +21,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"os"
 	"path/filepath"
+	"html/template"
 )
 
 var mongoClient *mongo.Client
@@ -40,7 +41,7 @@ type User struct {
 type Product struct {
 	ID          primitive.ObjectID `json:"id" bson:"_id"`
 	Name        string             `json:"name" bson:"name"`
-	Description string             `json:"description" bson:"description"`
+	Description template.HTML             `json:"description" bson:"description"`
 	Price       float64            `json:"price" bson:"price"`
 	Quantity    int                `json:"quantity" bson:"quantity"`
 	ImageURL    string             `json:"imageURL" bson:"imageURL"`
@@ -50,7 +51,7 @@ type Product struct {
 type SellerProduct struct {
 	ID          primitive.ObjectID `json:"id" bson:"_id"`
 	Name        string             `json:"name" bson:"name"`
-	Description string             `json:"description" bson:"description"`
+	Description template.HTML       `json:"description" bson:"description"`
 	Price       float64            `json:"price" bson:"price"`
 	Quantity    int                `json:"quantity" bson:"quantity"`
 	ImageURL    string             `json:"imageURL" bson:"imageURL"`
@@ -498,10 +499,12 @@ func addProduct(c *fiber.Ctx) error {
 	productID := primitive.NewObjectID()
 	sellerProdColl := getCollection("seller-products")
 	productsColl := getCollection("products")
+	
+	// Description değeri, template.HTML ile dönüştürülerek saklanır.
 	sellerDoc := SellerProduct{
 		ID:          primitive.NewObjectID(),
 		Name:        name,
-		Description: description,
+		Description: template.HTML(description), // Dönüştürme yapıldı
 		Price:       priceVal,
 		Quantity:    qtyVal,
 		ImageURL:    imageURL,
@@ -515,7 +518,7 @@ func addProduct(c *fiber.Ctx) error {
 	prodDoc := bson.M{
 		"_id":         productID,
 		"name":        name,
-		"description": description,
+		"description": template.HTML(description), // Dönüştürme yapıldı
 		"price":       priceVal,
 		"quantity":    qtyVal,
 		"imageURL":    imageURL,
@@ -528,6 +531,8 @@ func addProduct(c *fiber.Ctx) error {
 	log.Printf("    => SUCCESS: product '%s' inserted for user '%s'", productID.Hex(), user.Username)
 	return c.Redirect("/my-products")
 }
+
+
 
 func getMyProducts(c *fiber.Ctx) error {
 	log.Println(">>> [getMyProducts] =>", c.Method(), c.OriginalURL())
