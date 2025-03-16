@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>My Products</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+    }
+    nav {
+      background-color: #0056b3;
+      color: white;
+      padding: 15px;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin-right: 30px;
+      font-weight: bold;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 40px auto;
+      background-color: #fff;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 6px;
+    }
+    h1 {
+      margin-top: 0;
+      color: #333;
+      text-align: center;
+    }
+    .my-product-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+    .my-product-card {
+      background-color: #fafafa;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      width: 220px;
+      text-align: center;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .my-product-card img {
+      width: 100%;
+      height: auto;
+      object-fit: cover;
+      margin-bottom: 10px;
+    }
+    .my-product-card h3 {
+      margin: 10px 0 5px;
+      color: #007bff;
+    }
+    .my-product-card p {
+      margin: 5px 0;
+      color: #555;
+    }
+    .my-product-card p strong {
+      color: #333;
+    }
+    .update-form {
+      display: inline;
+    }
+    .update-form input[type="number"] {
+      width: 80px;
+    }
+    .no-products {
+      color: red;
+      text-align: center;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+    @media (max-width: 600px) {
+      .my-product-card {
+        width: calc(100% - 40px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/add-products?id={{.RandomID}}">Add Products</a>
+    <a href="/my-orders?id={{.RandomID}}">My Orders</a>
+    <a href="#" onclick="logout()">Logout</a>
+    <form id="logoutForm" method="POST" action="/logout" style="display:none;"></form>
+  </nav>
+  <script>
+    function logout() {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/logout';
+      document.body.appendChild(form);
+      form.submit();
+    }
+  </script>
+  <div class="container">
+    <h1>My Products</h1>
+    {{ if .SellerProducts }}
+      <div class="my-product-container">
+        {{ range .SellerProducts }}
+        <div class="my-product-card">
+          <img src="{{ .ImageURL }}" alt="{{ .Name }}">
+          <h3>{{ .Name }}</h3>
+          <p>{{ .Description }}</p>
+          <p><strong>Stock:</strong> {{ .Quantity }}</p>
+          <p>
+            <strong>Price:</strong> ${{ printf "%.2f" .Price }}
+            <form action="/my-products?id={{$.RandomID}}" method="post" class="update-form">
+              <input type="hidden" name="productID" value="{{ .ProductID.Hex }}" />
+              <input type="number" name="newPrice" value="{{ printf "%.2f" .Price }}" step="0.01" />
+              <button type="submit">Update</button>
+            </form>
+          </p>
+        </div>
+        {{ end }}
+      </div>
+    {{ else }}
+      <p class="no-products">❌ Not Found Your Products.</p>
+    {{ end }}
+  </div>
+</body>
+</html>

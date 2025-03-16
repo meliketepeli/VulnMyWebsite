@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Products</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+    }
+    nav {
+      background-color: #0056b3;
+      color: white;
+      padding: 15px;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin-right: 30px;
+      font-weight: bold;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+    .logout {
+      cursor: pointer;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 20px;
+      background-color: #fff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      border-radius: 6px;
+    }
+    h1 {
+      margin-top: 0;
+      color: #333;
+    }
+    .product-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .product-card {
+      background-color: #fff;
+      flex: 0 0 calc(25% - 20px);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 15px;
+    }
+    .product-card a img:hover {
+      opacity: 0.8;
+      cursor: pointer;
+    }
+    .product-card h3 {
+      margin: 10px 0 5px;
+      color: #333;
+    }
+    .product-card p {
+      margin: 5px 0;
+      color: #555;
+    }
+    .product-card p strong {
+      color: #333;
+    }
+    .product-card form button {
+      background-color: #0056b3;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      margin-top: 10px;
+      cursor: pointer;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    .product-card form button:hover {
+      background-color: #00408a;
+    }
+    @media (max-width: 900px) {
+      .product-card {
+        flex: 0 0 calc(50% - 20px);
+      }
+    }
+    @media (max-width: 600px) {
+      .product-card {
+        flex: 0 0 calc(100% - 20px);
+      }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/products?id={{.RandomID}}">Products</a>
+  <a href="/carts?id={{.RandomID}}">Cart</a>
+  <a href="/addresses?id={{.RandomID}}">My Addresses</a>
+  <a href="/cards?id={{.RandomID}}">My Cards</a>
+  <a class="logout" onclick="logout()">Logout</a>
+</nav>
+
+<script>
+  function logout() {
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/logout';
+    document.body.appendChild(form);
+    form.submit();
+  }
+</script>
+
+<div class="container">
+  <h1>Products</h1>
+  <div class="product-container">
+    {{ if .Products }}
+      {{ range .Products }}
+      <div class="product-card">
+        {{ if eq $.UserRole "user" }}
+          <a href="{{ .ImageURL }}" target="_blank">
+            <img src="{{ .ImageURL }}" alt="Product Image">
+          </a>
+        {{ else }}
+          <img src="{{ .ImageURL }}" alt="Product Image">
+        {{ end }}
+        <h3>{{ .Name }}</h3>
+        <p>{{ .Description }}</p>
+        <p><strong>Stock:</strong> {{ .Quantity }}</p>
+        <p><strong>Price:</strong> ${{ .Price }}</p>
+        {{ if eq $.UserRole "user" }}
+        <form action="/add-to-cart" method="POST">
+          <input type="hidden" name="product_id" value="{{ .ID.Hex }}">
+          <input type="hidden" name="name" value="{{ .Name }}">
+          <input type="hidden" name="price" value="{{ .Price }}">
+          <input type="hidden" name="quantity" value="1">
+          <button type="submit">Add to Cart</button>
+        </form>
+        {{ end }}
+      </div>
+      {{ end }}
+    {{ else }}
+      <p style="color:red;">No products found.</p>
+    {{ end }}
+  </div>
+</div>
+
+</body>
+</html>

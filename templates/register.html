@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register Page</title>
+  <style>
+    /* Arka plan, degrade */
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #007bff, #9d80f5);
+      margin: 0; 
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #333;
+    }
+
+    /* Kayıt formunun ana konteyneri */
+    .register-container {
+      background-color: #fff;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    /* Basit logo/marka */
+    .logo {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: #007bff;
+      margin-bottom: 1rem;
+    }
+
+    h1 {
+      margin-bottom: 1.5rem;
+      color: #007bff;
+      font-size: 1.5rem;
+    }
+
+    .register-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      text-align: left;
+    }
+
+    .register-form label {
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 0.3rem;
+    }
+
+    .register-form input,
+    .register-form select {
+      padding: 0.75rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 1rem;
+      transition: border-color 0.3s ease;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .register-form input:focus,
+    .register-form select:focus {
+      border-color: #007bff;
+      outline: none;
+    }
+
+    .register-form button {
+      background-color: #007bff;
+      color: #fff;
+      padding: 0.75rem;
+      font-size: 1rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      margin-top: 0.5rem;
+    }
+
+    .register-form button:hover {
+      background-color: #0056b3;
+    }
+
+    .register-container p {
+      margin-top: 1rem;
+      font-size: 0.95rem;
+    }
+
+    /* Responsive düzen: küçük ekranlar */
+    @media (max-width: 480px) {
+      .register-container {
+        padding: 1.5rem;
+      }
+      .register-form input,
+      .register-form button,
+      .register-form select {
+        font-size: 0.9rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="register-container">
+
+  <h1>Register Page</h1>
+  
+  <form id="registerForm" class="register-form">
+    <label for="username">Username:</label>
+    <input type="text" id="username" name="username" required/>
+
+    <label for="role">Role:</label>
+    <select id="role" name="role">
+      <option value="user">User</option>
+      <option value="seller">Seller</option> <!-- Kullanıcı Seller seçebilir -->
+    </select>
+
+    <label for="password">Password:</label>
+    <input type="password" id="password" name="password" required/>
+
+    <label for="confirm_password">Retry Password:</label>
+    <input type="password" id="confirm_password" name="confirm_password" required/>
+
+    <button type="button" onclick="register()">Register</button>
+  </form>
+
+  <p>Do you have an account?</p>
+  <button onclick="window.location.href='/login'">Login</button>
+
+  <p id="responseMessage"></p>
+</div>
+
+<script>
+  async function register() {
+    const username = document.getElementById("username").value;
+    const role = document.getElementById("role").value;
+    const password = document.getElementById("password").value;
+    const confirmPassword = document.getElementById("confirm_password").value;
+
+    if (password !== confirmPassword) {
+      alert("Passwords do not match!");
+      return;
+    }
+
+    const response = await fetch("/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, role, password })
+    });
+
+    // Redirect kontrolü
+    if (response.redirected) {
+      window.location.href = response.url; // Kullanıcıyı yönlendir
+    } else {
+      alert(await response.text());
+    }
+  }
+</script>
+
+</body>
+</html>

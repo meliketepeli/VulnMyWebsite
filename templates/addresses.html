@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Addresses</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0; 
+            padding: 0; 
+            background-color: #f5f5f5;
+        }
+        nav {
+            background-color: #0056b3;
+            color: white;
+            padding: 15px;
+        }
+        nav a {
+            color: white;
+            text-decoration: none;
+            margin-right: 30px;
+            font-weight: bold;
+        }
+        nav a:hover {
+            text-decoration: underline;
+        }
+        .container {
+            margin: 0 auto;
+            max-width: 900px;
+            padding: 20px;
+            background-color: #fff;
+            margin-top: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            margin-top: 0;
+        }
+        .address-form {
+            margin-bottom: 30px;
+        }
+        .address-form label {
+            display: inline-block;
+            width: 100px;
+            margin-bottom: 10px;
+        }
+        .address-form input[type="text"] {
+            padding: 5px;
+            margin-bottom: 5px;
+            width: 250px;
+        }
+        .address-form button {
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        .address-form button:hover {
+            background-color: #00408a;
+        }
+        .saved-addresses .address-item {
+            border-bottom: 1px solid #ccc;
+            padding: 10px 0;
+        }
+        .saved-addresses p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+  <a href="/products?id={{.RandomID}}">Products</a>
+  <a href="/carts?id={{.RandomID}}">Cart</a>
+  <a href="/addresses?id={{.RandomID}}">My Addresses</a>
+  <a href="/cards?id={{.RandomID}}">My Cards</a>
+  <a href="#" onclick="logout()">Logout</a>
+</nav>
+
+<script>
+  function logout() {
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/logout';
+    document.body.appendChild(form);
+    form.submit();
+  }
+</script>
+
+<div class="container">
+    <h1>My Addresses</h1>
+    <form class="address-form" action="/addresses" method="POST">
+        <div>
+            <label>Street:</label>
+            <input type="text" name="street" />
+        </div>
+        <div>
+            <label>City:</label>
+            <input type="text" name="city" />
+        </div>
+        <div>
+            <label>Country:</label>
+            <input type="text" name="country" />
+        </div>
+        <div>
+            <button type="submit">Add Address</button>
+        </div>
+    </form>
+
+    <div class="saved-addresses">
+        <h2>My Saved Addresses</h2>
+        {{ range .Addresses }}
+            <div class="address-item">
+                <p><strong>Street:</strong> {{.Street}}</p>
+                <p><strong>City:</strong> {{.City}}</p>
+                <p><strong>Country:</strong> {{.Country}}</p>
+            </div>
+        {{ end }}
+    </div>
+</div>
+
+</body>
+</html>

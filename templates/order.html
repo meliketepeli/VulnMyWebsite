@@ -1,0 +1,155 @@
+{{ define "order" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Seller Orders</title>
+  <style>
+    /* GENEL SAYFA STİLİ */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5; 
+    }
+
+    /* NAV BAR */
+    nav {
+      background-color: #0056b3;
+      color: white;
+      padding: 15px;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin-right: 30px;
+      font-weight: bold;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+
+    /* ANA KONTEYNER */
+    .container {
+      max-width: 900px;
+      margin: 40px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    h1, h2 {
+      margin-top: 0;
+      color: #333;
+      text-align: center;
+    }
+
+    /* TABLO */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    thead {
+      background-color: #007bff;
+      color: white;
+    }
+    th, td {
+      padding: 12px;
+      text-align: center;
+      border-bottom: 1px solid #ddd;
+    }
+    th {
+      font-weight: bold;
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Responsive tasarım - tabloyu yatayda kaydır */
+    @media (max-width: 600px) {
+      table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- NAV BAR -->
+<nav>
+  <a id="productsLink" href="/products?id={{.RandomID}}">Products</a>
+  <a id="cartLink" href="/carts?id={{.RandomID}}">Cart</a>
+  <a href="#" onclick="logout()">Logout</a>
+</nav>
+
+<!-- JS: Cookie işlemleri & logout -->
+<script>
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+
+  const userID = getCookie("userID");
+  const role = getCookie("role");
+
+  // Kullanıcının ID'sini linklere ekleyelim (opsiyonel)
+  if (userID) {
+    document.getElementById("productsLink").href = `/products?id=${userID}`;
+    document.getElementById("cartLink").href = `/carts?id=${userID}`;
+  }
+
+  // Eğer kullanıcı seller ise Cart linkini gizle
+  if (role === "seller") {
+    document.getElementById("cartLink").style.display = "none";
+  }
+
+  function logout() {
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/logout';
+    document.body.appendChild(form);
+    form.submit();
+  }
+</script>
+
+<!-- ANA KONTEYNER -->
+<div class="container">
+  <h2>Seller Orders</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Product Name</th>
+        <th>Price (USD)</th>
+        <th>Quantity</th>
+        <th>Total Amount</th>
+        <th>Address</th> <!-- Adres bilgileri için yeni sütun -->
+      </tr>
+    </thead>
+    <tbody>
+    {{ range .SellerOrder }}
+      <tr>
+        <td>{{ .Username }}</td>
+        <td>{{ .Name }}</td>
+        <td>${{ printf "%.2f" .Price }}</td>
+        <td>{{ .Quantity }}</td>
+        <td>${{ printf "%.2f" .Total }}</td>
+        <!-- Örnek: Sunucu tarafında .Street, .City, .Country alanları SellerOrder'a eklenmişse -->
+        <td>{{ .Street }}, {{ .City }}, {{ .Country }}</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+</div>
+
+</body>
+</html>
+{{ end }}

@@ -1,0 +1,88 @@
+/* Genel sayfa düzeni */
+body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #007bff, #555555);
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    color: #333;
+}
+
+/* Login kutusu */
+.login-container {
+    background-color: #fff;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+}
+
+/* Başlık */
+.login-container h1 {
+    margin-bottom: 1.5rem;
+    color: #007bff;
+}
+
+/* Form düzeni */
+.login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Etiketler */
+.login-form label {
+    text-align: left;
+    font-weight: bold;
+    color: #555;
+}
+
+/* Giriş kutuları */
+.login-form input {
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+    transition: border-color 0.3s ease;
+}
+
+/* Giriş kutusu hover ve focus */
+.login-form input:focus {
+    border-color: #007bff;
+    outline: none;
+}
+
+/* Giriş butonu */
+.login-button {
+    background-color: #007bff;
+    color: #fff;
+    padding: 0.75rem;
+    font-size: 1rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+/* Buton hover */
+.login-button:hover {
+    background-color: #0056b3;
+}
+
+/* Responsive tasarım */
+@media (max-width: 480px) {
+    .login-container {
+        padding: 1.5rem;
+    }
+
+    .login-form input,
+    .login-button {
+        font-size: 0.9rem;
+    }
+}

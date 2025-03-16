@@ -1,0 +1,192 @@
+{{ define "cart" }}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>My Cart</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f5f5;
+    }
+    nav {
+      background-color: #0056b3;
+      color: white;
+      padding: 15px;
+    }
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin-right: 30px;
+      font-weight: bold;
+    }
+    nav a:hover {
+      text-decoration: underline;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 40px auto;
+      background-color: #fff;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-radius: 6px;
+    }
+    h1 {
+      margin-top: 0;
+      color: #333;
+      text-align: center;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table thead {
+      background-color: #f0f0f0;
+    }
+    table th, table td {
+      padding: 12px 10px;
+      text-align: left;
+    }
+    table th {
+      color: #555;
+      border-bottom: 2px solid #ccc;
+    }
+    table tr {
+      border-bottom: 1px solid #ccc;
+    }
+    table tr:last-child td {
+      border-bottom: none;
+    }
+    .remove-form button {
+      background-color: #dc3545;
+      border: none;
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.2s;
+    }
+    .remove-form button:hover {
+      background-color: #c82333;
+    }
+    .total-amount {
+      font-weight: bold;
+      color: #333;
+    }
+    @media (max-width: 600px) {
+      table thead {
+        display: none;
+      }
+      table, table tbody, table tr, table td {
+        display: block;
+        width: 100%;
+      }
+      table tr {
+        margin-bottom: 10px;
+        border: 1px solid #ccc;
+      }
+      table td {
+        border-bottom: none;
+      }
+      table td:before {
+        content: attr(data-label);
+        font-weight: bold;
+        display: inline-block;
+        width: 120px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a id="productsLink" href="/products?id={{.RandomID}}">Products</a>
+  <a id="cartLink" href="/carts?id={{.RandomID}}">My Cart</a>
+  <a href="/addresses?id={{.RandomID}}">My Addresses</a>
+  <a href="/cards?id={{.RandomID}}">My Cards</a>
+  <a href="#" onclick="logout()">Logout</a>
+</nav>
+
+<script>
+  function logout() {
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/logout';
+    document.body.appendChild(form);
+    form.submit();
+  }
+  function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+  }
+  const userID = getCookie("userID");
+  if (userID) {
+      document.getElementById("productsLink").href = `/products?id=${randomID}`;
+      document.getElementById("cartLink").href = `/carts?id=${randomID}`;
+  }
+</script>
+
+<div class="container">
+  <h1>My Cart</h1>
+  {{ if .CartItems }}
+  <table>
+    <thead>
+      <tr>
+        <th>Product Name</th>
+        <th>Price (USD)</th>
+        <th>Quantity</th>
+        <th>Subtotal</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{ range .CartItems }}
+      <tr>
+        <td data-label="Product Name">{{ .Name }}</td>
+        <td data-label="Price">$<span class="item-price">{{ printf "%.2f" .Price }}</span></td>
+        <td data-label="Quantity"><span class="item-qty">{{ .Quantity }}</span></td>
+        <td data-label="Subtotal">
+          $<span class="total-amount">0.00</span>
+        </td>
+        <td data-label="Action">
+          <form class="remove-form" action="/remove-from-cart?username={{.Username}}" method="POST">
+            <input type="hidden" name="name" value="{{.Name}}" />
+            <button type="submit">Remove</button>
+          </form>
+        </td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+  {{ else }}
+    <p>No products found in this cart.</p>
+  {{ end }}
+</div>
+
+<script>
+  window.onload = function() {
+    let cartRows = document.querySelectorAll("tbody tr");
+    cartRows.forEach(function(row) {
+      let priceEl = row.querySelector(".item-price");
+      let qtyEl   = row.querySelector(".item-qty");
+      let subtotalEl = row.querySelector(".total-amount");
+      if (priceEl && qtyEl && subtotalEl) {
+        let price = parseFloat(priceEl.textContent);
+        let quantity = parseInt(qtyEl.textContent);
+        if (!isNaN(price) && !isNaN(quantity)) {
+          let total = price * quantity;
+          subtotalEl.textContent = total.toFixed(2);
+        }
+      }
+    });
+  };
+</script>
+
+</body>
+</html>
+{{ end }}

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Cards</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0; 
+            padding: 0; 
+            background-color: #f5f5f5;
+        }
+        nav {
+            background-color: #0056b3;
+            color: white;
+            padding: 15px;
+        }
+        nav a {
+            color: white;
+            text-decoration: none;
+            margin-right: 30px;
+            font-weight: bold;
+        }
+        nav a:hover {
+            text-decoration: underline;
+        }
+        .container {
+            margin: 0 auto;
+            max-width: 900px;
+            padding: 20px;
+            background-color: #fff;
+            margin-top: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            margin-top: 0;
+        }
+        .card-form {
+            margin-bottom: 30px;
+        }
+        .card-form label {
+            display: inline-block;
+            width: 150px;
+            margin-bottom: 10px;
+        }
+        .card-form input[type="text"] {
+            padding: 5px;
+            margin-bottom: 5px;
+            width: 250px;
+        }
+        .card-form button {
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        .card-form button:hover {
+            background-color: #00408a;
+        }
+        .saved-cards .card-item {
+            border-bottom: 1px solid #ccc;
+            padding: 10px 0;
+        }
+        .saved-cards p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+  <a href="/products?id={{.RandomID}}">Products</a>
+  <a href="/carts?id={{.RandomID}}">Cart</a>
+  <a href="/addresses?id={{.RandomID}}">My Addresses</a>
+  <a href="/cards?id={{.RandomID}}">My Cards</a>
+  <a href="#" onclick="logout()">Logout</a>
+</nav>
+
+<script>
+  function logout() {
+    var form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/logout';
+    document.body.appendChild(form);
+    form.submit();
+  }
+</script>
+
+<div class="container">
+    <h1>My Cards</h1>
+    <form class="card-form" action="/cards" method="POST">
+        <div>
+            <label>Card Number:</label>
+            <input type="text" name="card_number" />
+        </div>
+        <div>
+            <label>Expiry Date (MM/YY):</label>
+            <input type="text" name="expiry_date" placeholder="MM/YY" />
+        </div>
+        <div>
+            <label>CVV:</label>
+            <input type="text" name="cvv" />
+        </div>
+        <div>
+            <button type="submit">Add Card</button>
+        </div>
+    </form>
+
+    <div class="saved-cards">
+        <h2>My Saved Cards</h2>
+        {{ range .Cards }}
+            <div class="card-item">
+                <p><strong>Card Number:</strong> {{.CardNumber}}</p>
+                <p><strong>Expiry:</strong> {{.ExpiryDate}}</p>
+                <p><strong>CVV:</strong> {{.CVV}}</p>
+            </div>
+        {{ end }}
+    </div>
+</div>
+
+</body>
+</html>
