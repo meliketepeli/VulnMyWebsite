@@ -870,9 +870,9 @@ func addToCart(c *fiber.Ctx) error {
 }
 
 */
-
 func addToCart(c *fiber.Ctx) error {
 	log.Println(">>> [addToCart] => POST /add-to-cart")
+
 	userID := c.Cookies("userID")
 	if userID == "" {
 		log.Println("    Unauthorized => no userID cookie")
@@ -881,7 +881,7 @@ func addToCart(c *fiber.Ctx) error {
 
 	productID := c.FormValue("product_id")
 	name := c.FormValue("name")
-	priceStr := c.FormValue("price")     // İstemcinin gönderdiği fiyat
+	priceStr := c.FormValue("price") // İstemcinin gönderdiği fiyat
 	qtyStr := c.FormValue("quantity")
 
 	oid, err := primitive.ObjectIDFromHex(productID)
@@ -905,16 +905,17 @@ func addToCart(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
 	}
 
+	// 1) "carts" tablosunu güncelle veya yeni ekle
 	cartsColl := getCollection("carts")
 	filter := bson.M{"product_id": oid, "user_id": uid}
 	var existing Cart
 
 	errFind := cartsColl.FindOne(context.TODO(), filter).Decode(&existing)
 	if errFind == nil {
-		// ÜRÜN ZATEN VAR => quantity'yi artırırken PRICE'ı da GÜNCELLE (iş mantığı açığı)
+		// ÜRÜN ZATEN VAR => quantity'yi artır + price client'tan gelen (iş mantığı açığı)
 		update := bson.M{
-			"$inc": bson.M{"quantity": qtyVal},    // miktar ekle
-			"$set": bson.M{"price": priceVal},     // fiyatı da client'tan gelen değere çek
+			"$inc": bson.M{"quantity": qtyVal},
+			"$set": bson.M{"price": priceVal},
 		}
 
 		if _, errUpd := cartsColl.UpdateOne(context.TODO(), filter, update); errUpd != nil {
@@ -923,14 +924,14 @@ func addToCart(c *fiber.Ctx) error {
 		}
 		log.Printf("    => Updated existing cart item => quantity +%d, price => %.2f\n", qtyVal, priceVal)
 	} else {
-		// YENİ BİR CART ITEM => client'tan gelen fiyat
+		// YENİ CART ITEM => Price/doğrudan client'tan
 		newCart := Cart{
 			Id:        primitive.NewObjectID(),
 			Username:  c.Cookies("Username"),
 			UserID:    uid,
 			Quantity:  qtyVal,
 			Name:      name,
-			Price:     priceVal,  // direkt client'tan gelen
+			Price:     priceVal,
 			ProductID: oid,
 		}
 		_, errIns := cartsColl.InsertOne(context.TODO(), newCart)
@@ -941,13 +942,13 @@ func addToCart(c *fiber.Ctx) error {
 		log.Println("    => Inserted new cart item")
 	}
 
-	// Aşağıda orders ve seller-orders tablosunda da PRICE => priceVal (client'ı esas alır)
+	// 2) "orders" tablosuna da (her seferinde) insert
 	ordersColl := getCollection("orders")
 	newOrder := Order{
 		Id:        primitive.NewObjectID(),
 		Username:  c.Cookies("Username"),
 		Name:      name,
-		Price:     priceVal,    // client'tan
+		Price:     priceVal,
 		Quantity:  qtyVal,
 		ProductID: oid,
 		UserID:    uid,
@@ -960,12 +961,13 @@ func addToCart(c *fiber.Ctx) error {
 	}
 	log.Println("    => Inserted new doc in 'orders'")
 
+	// 3) "seller-orders" tablosuna da insert
 	sellerOrdersColl := getCollection("seller-orders")
 	newSellerOrder := SellerOrder{
 		Id:        primitive.NewObjectID(),
 		Username:  c.Cookies("Username"),
 		Name:      name,
-		Price:     priceVal,  // yine client'tan
+		Price:     priceVal,
 		Quantity:  qtyVal,
 		ProductID: oid,
 		UserID:    uid,
@@ -977,6 +979,38 @@ func addToCart(c *fiber.Ctx) error {
 			JSON(fiber.Map{"error": "Failed to add seller order"})
 	}
 	log.Println("    => Inserted new doc in 'seller-orders'")
+
+	// 4) [YENİ]: "products" tablosunu da update => satıcının "my-products" sayfası buradan okuyorsa
+	{
+		productsColl := getCollection("products")
+		prodFilter := bson.M{"_id": oid} // Ürünün ID'si
+		updateProducts := bson.M{"$set": bson.M{
+			"price":    priceVal,
+			"quantity": qtyVal,
+		}}
+		_, errProd := productsColl.UpdateOne(context.TODO(), prodFilter, updateProducts)
+		if errProd != nil {
+			log.Println("    UpdateOne(products) =>", errProd)
+		} else {
+			log.Printf("    => Updated 'products' => price=%.2f, quantity=%d\n", priceVal, qtyVal)
+		}
+	}
+
+	// 5) [YENİ]: "seller-products" tablosuna da update => eğer satıcının "my-products" sayfası "seller-products" koleksiyonundan veri çekiyorsa
+	{
+		sellerProdColl := getCollection("seller-products")
+		filterSellerProd := bson.M{"product_id": oid} // genelde product_id alanıyla eşleştirirsiniz
+		updateSellerProd := bson.M{"$set": bson.M{
+			"price":    priceVal,
+			"quantity": qtyVal,
+		}}
+		_, errSp := sellerProdColl.UpdateOne(context.TODO(), filterSellerProd, updateSellerProd)
+		if errSp != nil {
+			log.Println("    UpdateOne(seller-products) =>", errSp)
+		} else {
+			log.Println("    => seller-products updated => price, quantity")
+		}
+	}
 
 	return c.Redirect("/carts")
 }
@@ -1006,40 +1040,99 @@ func removeProduct(c *fiber.Ctx) error {
 	return c.Redirect("/my-products")
 }
 
-
 func removeFromCart(c *fiber.Ctx) error {
 	log.Println(">>> [removeFromCart] => POST /remove-from-cart")
+
 	name := c.FormValue("name")
 	if name == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Product name is required"})
 	}
+
 	username := c.Query("username")
 	if username == "" {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "username is required"})
 	}
+
+	// [YENİ] => Kaç tane ürünü bir seferde sileceğimiz parametresi
+	removeQtyStr := c.FormValue("removeQty")
+	if removeQtyStr == "" {
+		removeQtyStr = "1" // varsayılan 1
+	}
+	removeQty, err := strconv.Atoi(removeQtyStr)
+	if err != nil || removeQty < 1 {
+		// Hatalı veya <1 gelirse 1 sayalım
+		removeQty = 1
+	}
+
 	coll := getCollection("carts")
 	filter := bson.M{"name": name}
+
 	var existingCartItem Cart
 	if err := coll.FindOne(context.TODO(), filter).Decode(&existingCartItem); err != nil {
 		log.Println("    item not found =>", err)
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Item not found in cart"})
 	}
-	if existingCartItem.Quantity > 1 {
-		update := bson.M{"$inc": bson.M{"quantity": -1}}
-		if _, err := coll.UpdateOne(context.TODO(), filter, update); err != nil {
-			log.Println("    update error =>", err)
+
+	log.Printf("    => We will remove %d of '%s' from cart\n", removeQty, existingCartItem.Name)
+
+	// [YENİ] => seller-orders koleksiyonuna da aynı işlemi uygulayacağız
+	sellerOrdersColl := getCollection("seller-orders")
+	sellerOrdersFilter := bson.M{"name": existingCartItem.Name, "user_id": existingCartItem.UserID}
+
+	if existingCartItem.Quantity > removeQty {
+		// 1) Cart tablosunda quantity - removeQty
+		updateCart := bson.M{"$inc": bson.M{"quantity": -removeQty}}
+		if _, errUpd := coll.UpdateOne(context.TODO(), filter, updateCart); errUpd != nil {
+			log.Println("    update error =>", errUpd)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update cart item"})
 		}
-		log.Println("    => Decremented quantity by 1")
-	} else {
-		if _, err := coll.DeleteOne(context.TODO(), filter); err != nil {
-			log.Println("    deleteOne error =>", err)
+		log.Printf("    => Decremented cart quantity by %d\n", removeQty)
+
+		// 2) seller-orders tablosunda da quantity - removeQty
+		updateSo := bson.M{"$inc": bson.M{"quantity": -removeQty}}
+		if _, errSo := sellerOrdersColl.UpdateOne(context.TODO(), sellerOrdersFilter, updateSo); errSo != nil {
+			log.Println("    seller-orders update error =>", errSo)
+			// Normal akışı bozmamak için hata dönmüyoruz
+		} else {
+			log.Printf("    => Decremented seller-orders quantity by %d\n", removeQty)
+		}
+
+	} else if existingCartItem.Quantity == removeQty {
+		// Tamamen sıfırlanacak => cart’tan sil
+		if _, errDel := coll.DeleteOne(context.TODO(), filter); errDel != nil {
+			log.Println("    deleteOne error =>", errDel)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to remove item from cart"})
 		}
-		log.Println("    => Removed item from cart (quantity was 1)")
+		log.Println("    => Removed item from cart completely (exact match)")
+
+		// seller-orders'tan da sil
+		if _, errSoDel := sellerOrdersColl.DeleteOne(context.TODO(), sellerOrdersFilter); errSoDel != nil {
+			log.Println("    seller-orders delete error =>", errSoDel)
+		} else {
+			log.Println("    => Removed item from seller-orders completely (exact match)")
+		}
+
+	} else {
+		// Kullanıcı removeQty, cart’taki quantity’den büyükse => hepsini sil
+		if _, errDel := coll.DeleteOne(context.TODO(), filter); errDel != nil {
+			log.Println("    deleteOne error =>", errDel)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to remove item from cart"})
+		}
+		log.Printf("    => Removed item from cart (tried to remove %d, had only %d)\n",
+			removeQty, existingCartItem.Quantity)
+
+		// seller-orders'tan da sil
+		if _, errSoDel := sellerOrdersColl.DeleteOne(context.TODO(), sellerOrdersFilter); errSoDel != nil {
+			log.Println("    seller-orders delete error =>", errSoDel)
+		} else {
+			log.Println("    => Removed item from seller-orders (quantity < removeQty scenario)")
+		}
 	}
+
 	return c.Redirect(fmt.Sprintf("/carts?username=%s", username))
 }
+
+
 
 func getOrders(c *fiber.Ctx) error {
 	log.Println(">>> [getOrders] => GET /orders")
