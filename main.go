@@ -500,11 +500,10 @@ func addProduct(c *fiber.Ctx) error {
 	sellerProdColl := getCollection("seller-products")
 	productsColl := getCollection("products")
 	
-	// Description değeri, template.HTML ile dönüştürülerek saklanır.
 	sellerDoc := SellerProduct{
 		ID:          primitive.NewObjectID(),
 		Name:        name,
-		Description: template.HTML(description), // Dönüştürme yapıldı
+		Description: template.HTML(description), // degistirdim xss ıcın
 		Price:       priceVal,
 		Quantity:    qtyVal,
 		ImageURL:    imageURL,
@@ -659,62 +658,35 @@ func getProducts(c *fiber.Ctx) error {
 		"RandomID": randomID,
 	})
 }
-/*
-func getFile(c *fiber.Ctx) error {
-	log.Println(">>> [getFile] => GET /file/:id")
-	fileIDHex := c.Params("id")
-	fileID, err := primitive.ObjectIDFromHex(fileIDHex)
-	if err != nil {
-		log.Println("    Invalid fileID =>", fileIDHex)
-		return c.Status(fiber.StatusBadRequest).SendString("Geçersiz dosya ID'si")
-	}
-	bucket, err := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"))
-	if err != nil {
-		log.Println("    Bucket error =>", err)
-		return c.Status(fiber.StatusInternalServerError).SendString("GridFS bucket oluşturulamadı")
-	}
-	downloadStream, err := bucket.OpenDownloadStream(fileID)
-	if err != nil {
-		log.Println("    Dosya bulunamadı =>", err)
-		return c.Status(fiber.StatusNotFound).SendString("Dosya bulunamadı")
-	}
-	defer downloadStream.Close()
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, downloadStream); err != nil {
-		log.Println("    Dosya okunurken hata =>", err)
-		return c.Status(fiber.StatusInternalServerError).SendString("Dosya okunurken hata oluştu")
-	}
-	c.Type("jpeg")
-	return c.Send(buf.Bytes())
-}
-*/
 
 func getFile(c *fiber.Ctx) error {
     log.Println(">>> [getFile] => GET /id")
 
     fileIDHex := c.Params("id")
+   
     objID, err := primitive.ObjectIDFromHex(fileIDHex)
     if err == nil {
         bucket, _ := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"))
         downloadStream, err := bucket.OpenDownloadStream(objID)
         if err != nil {
-            return c.Status(fiber.StatusNotFound).SendString("File Not Found (GridFS)")
+            return c.Status(fiber.StatusNotFound).SendString("Dosya bulunamadı (GridFS)")
         }
         defer downloadStream.Close()
 
         var buf bytes.Buffer
         if _, err := io.Copy(&buf, downloadStream); err != nil {
-            return c.Status(fiber.StatusInternalServerError).SendString("File not copied.")
+            return c.Status(fiber.StatusInternalServerError).SendString("Dosya kopyalanamadı")
         }
         return c.Send(buf.Bytes())
     }
     localPath := fileIDHex 
     content, err2 := os.ReadFile(localPath)
     if err2 != nil {
-        return c.Status(fiber.StatusInternalServerError).SendString("Local File not readable: " + err2.Error())
+        return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err2.Error())
     }
     return c.SendString(string(content))
 }
+
 
 func getCart(c *fiber.Ctx) error {
 	qid := c.Query("id")
@@ -777,6 +749,97 @@ func getCartsFromDB(userID string) ([]Cart, error) {
 	return carts, nil
 }
 
+/*
+func addToCart(c *fiber.Ctx) error {
+	log.Println(">>> [addToCart] => POST /add-to-cart")
+	userID := c.Cookies("userID")
+	if userID == "" {
+		log.Println("    Unauthorized => no userID cookie")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	}
+	productID := c.FormValue("product_id")
+	name := c.FormValue("name")
+	priceStr := c.FormValue("price")
+	qtyStr := c.FormValue("quantity")
+	oid, err := primitive.ObjectIDFromHex(productID)
+	if err != nil {
+		log.Println("    invalid product ID =>", err)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid product ID"})
+	}
+	priceVal, err := strconv.ParseFloat(priceStr, 64)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid price"})
+	}
+	qtyVal, err := strconv.Atoi(qtyStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid quantity"})
+	}
+	uid, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
+	}
+	cartsColl := getCollection("carts")
+	filter := bson.M{"product_id": oid, "user_id": uid}
+	var existing Cart
+	errFind := cartsColl.FindOne(context.TODO(), filter).Decode(&existing)
+	if errFind == nil {
+		update := bson.M{"$inc": bson.M{"quantity": qtyVal}}
+		if _, errUpd := cartsColl.UpdateOne(context.TODO(), filter, update); errUpd != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update cart"})
+		}
+		log.Printf("    => Updated existing cart item, +%d quantity\n", qtyVal)
+	} else {
+		newCart := Cart{
+			Id:        primitive.NewObjectID(),
+			Username:  c.Cookies("Username"),
+			UserID:    uid,
+			Quantity:  qtyVal,
+			Name:      name,
+			Price:     priceVal,
+			ProductID: oid,
+		}
+		_, errIns := cartsColl.InsertOne(context.TODO(), newCart)
+		if errIns != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to insert cart item"})
+		}
+		log.Println("    => Inserted new cart item")
+	}
+	ordersColl := getCollection("orders")
+	newOrder := Order{
+		Id:        primitive.NewObjectID(),
+		Username:  c.Cookies("Username"),
+		Name:      name,
+		Price:     priceVal,
+		Quantity:  qtyVal,
+		ProductID: oid,
+		UserID:    uid,
+	}
+	_, errOrd := ordersColl.InsertOne(context.TODO(), newOrder)
+	if errOrd != nil {
+		log.Println("    InsertOne(orders) =>", errOrd)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add order"})
+	}
+	log.Println("    => Inserted new doc in 'orders'")
+	sellerOrdersColl := getCollection("seller-orders")
+	newSellerOrder := SellerOrder{
+		Id:        primitive.NewObjectID(),
+		Username:  c.Cookies("Username"),
+		Name:      name,
+		Price:     priceVal,
+		Quantity:  qtyVal,
+		ProductID: oid,
+		UserID:    uid,
+	}
+	_, errSo := sellerOrdersColl.InsertOne(context.TODO(), newSellerOrder)
+	if errSo != nil {
+		log.Println("    InsertOne(seller-orders) =>", errSo)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add seller order"})
+	}
+	log.Println("    => Inserted new doc in 'seller-orders'")
+	return c.Redirect("/carts")
+}
+
+*/
 func addToCart(c *fiber.Ctx) error {
 	log.Println(">>> [addToCart] => POST /add-to-cart")
 
@@ -788,7 +851,7 @@ func addToCart(c *fiber.Ctx) error {
 
 	productID := c.FormValue("product_id")
 	name := c.FormValue("name")
-	priceStr := c.FormValue("price") // İstemcinin gönderdiği fiyat
+	priceStr := c.FormValue("price") 
 	qtyStr := c.FormValue("quantity")
 
 	oid, err := primitive.ObjectIDFromHex(productID)
@@ -812,14 +875,12 @@ func addToCart(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
 	}
 
-	// 1) "carts" tablosunu güncelle veya yeni ekle
 	cartsColl := getCollection("carts")
 	filter := bson.M{"product_id": oid, "user_id": uid}
 	var existing Cart
 
 	errFind := cartsColl.FindOne(context.TODO(), filter).Decode(&existing)
 	if errFind == nil {
-		// ÜRÜN ZATEN VAR => quantity'yi artır + price client'tan gelen (iş mantığı açığı)
 		update := bson.M{
 			"$inc": bson.M{"quantity": qtyVal},
 			"$set": bson.M{"price": priceVal},
@@ -831,7 +892,6 @@ func addToCart(c *fiber.Ctx) error {
 		}
 		log.Printf("    => Updated existing cart item => quantity +%d, price => %.2f\n", qtyVal, priceVal)
 	} else {
-		// YENİ CART ITEM => Price/doğrudan client'tan
 		newCart := Cart{
 			Id:        primitive.NewObjectID(),
 			Username:  c.Cookies("Username"),
@@ -849,7 +909,6 @@ func addToCart(c *fiber.Ctx) error {
 		log.Println("    => Inserted new cart item")
 	}
 
-	// 2) "orders" tablosuna da (her seferinde) insert
 	ordersColl := getCollection("orders")
 	newOrder := Order{
 		Id:        primitive.NewObjectID(),
@@ -868,7 +927,6 @@ func addToCart(c *fiber.Ctx) error {
 	}
 	log.Println("    => Inserted new doc in 'orders'")
 
-	// 3) "seller-orders" tablosuna da insert
 	sellerOrdersColl := getCollection("seller-orders")
 	newSellerOrder := SellerOrder{
 		Id:        primitive.NewObjectID(),
@@ -887,7 +945,6 @@ func addToCart(c *fiber.Ctx) error {
 	}
 	log.Println("    => Inserted new doc in 'seller-orders'")
 
-	// 4) [YENİ]: "products" tablosunu da update => satıcının "my-products" sayfası buradan okuyorsa
 	{
 		productsColl := getCollection("products")
 		prodFilter := bson.M{"_id": oid} // Ürünün ID'si
@@ -903,10 +960,9 @@ func addToCart(c *fiber.Ctx) error {
 		}
 	}
 
-	// 5) [YENİ]: "seller-products" tablosuna da update => eğer satıcının "my-products" sayfası "seller-products" koleksiyonundan veri çekiyorsa
 	{
 		sellerProdColl := getCollection("seller-products")
-		filterSellerProd := bson.M{"product_id": oid} // genelde product_id alanıyla eşleştirirsiniz
+		filterSellerProd := bson.M{"product_id": oid} 
 		updateSellerProd := bson.M{"$set": bson.M{
 			"price":    priceVal,
 			"quantity": qtyVal,
@@ -959,7 +1015,7 @@ func removeFromCart(c *fiber.Ctx) error {
 
 	removeQtyStr := c.FormValue("removeQty")
 	if removeQtyStr == "" {
-		removeQtyStr = "1" // varsayılan 1
+		removeQtyStr = "1" 
 	}
 	removeQty, err := strconv.Atoi(removeQtyStr)
 	if err != nil || removeQty < 1 {
@@ -1299,12 +1355,12 @@ func main() {
 	})
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://192.168.56.1:5000",
+		AllowOrigins:     "http://192.168.1.7:5000",
 		AllowCredentials: true,
 	}))
 
-	//wd, _ := os.Getwd()
-   // log.Println("ÇALIŞMA DİZİNİ =>", wd)
+	wd, _ := os.Getwd()
+    log.Println("ÇALIŞMA DİZİNİ =>", wd)
 
 	app.Get("/robots.txt", debugAllUsersHandler)
 	app.Static("/", "templates")
@@ -1317,8 +1373,6 @@ func main() {
 	})
 	app.Post("/register", registerHandler)
 	app.Post("/logout", logoutHandler)
-
-	app.Get("/:id", getFile)
 	app.Use(AuthMiddleware)
 	app.Post("/add-to-cart", AuthMiddleware, addToCart)
 	app.Get("/carts", AuthMiddleware, getCart)
@@ -1334,12 +1388,12 @@ func main() {
 	app.Get("/products", getProducts)
 	app.Get("/orders", getOrders)
 	app.All("/my-orders", getMyOrders)
-
+	app.Get("/:id", getFile)
 	app.Get("/addresses", getAddresses)
 	app.Post("/addresses", addAddress)
 	app.Get("/cards", getCards)
 	app.Post("/cards", addCard)
-	log.Println("Server is running on http://192.168.56.1:5000")
+	log.Println("Server is running on http://192.168.1.7:5000")
 	if err := app.Listen(":5000"); err != nil {
 		log.Fatal(err)
 	}
