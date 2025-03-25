@@ -305,7 +305,7 @@ func AuthMiddleware(c *fiber.Ctx) error {
 	log.Println("    userID cookie =", userID)
 	return c.Next()
 }
-
+/*
 func JWTMiddleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		tokenString := c.Get("Authorization")
@@ -339,6 +339,83 @@ func JWTMiddleware() fiber.Handler {
 		return c.Next()
 	}
 }
+*/
+func JWTMiddleware() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		tokenString := c.Get("Authorization")
+		if tokenString == "" || len(tokenString) <= 7 {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing or invalid token"})
+		}
+		tokenString = tokenString[7:] // Remove "Bearer "
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
+			return jwtSecret, nil
+		})
+
+		if err != nil || !token.Valid {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
+		}
+
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid claims"})
+		}
+
+		username, ok := claims["username"].(string)
+		if !ok {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Username claim missing"})
+		}
+
+		c.Locals("username", username)
+		return c.Next()
+	}
+}
+
+func jwtProtectedEndpoint(c *fiber.Ctx) error {
+	username := c.Locals("username").(string)
+	return c.JSON(fiber.Map{
+		"message":  "JWT doğrulandı!",
+		"username": username,
+	})
+}
+
+func getJWTTokenHandler(c *fiber.Ctx) error {
+	var creds struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := c.BodyParser(&creds); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
+	}
+
+	// Kullanıcı veritabanından çekiliyor
+	usersColl := getUserCollection()
+	var user User
+	err := usersColl.FindOne(context.TODO(), bson.M{
+		"Username": creds.Username,
+		"Password": creds.Password,
+	}).Decode(&user)
+
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
+	}
+
+	// JWT Token oluşturuluyor
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"username": user.Username,
+		"exp":      time.Now().Add(time.Hour * 1).Unix(),
+	})
+	signedToken, err := token.SignedString(jwtSecret)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Token creation failed"})
+	}
+
+	return c.JSON(fiber.Map{"token": signedToken})
+}
+
 
 func registerHandler(c *fiber.Ctx) error {
 	log.Println(">>> [registerHandler] => POST /register")
@@ -374,7 +451,7 @@ func registerHandler(c *fiber.Ctx) error {
 	log.Printf("    => User registered successfully: %s", newUser.Username)
 	return c.Redirect("/login")
 }
-
+/*
 func loginHandler(c *fiber.Ctx) error {
 	log.Println(">>> [loginHandler] => POST /login")
 	var reqBody = make(map[string]interface{})
@@ -421,6 +498,80 @@ func loginHandler(c *fiber.Ctx) error {
 	}
 	return c.Redirect("/products?id=" + strconv.Itoa(user.RandomID))
 }
+	*/
+	
+	func loginHandler(c *fiber.Ctx) error {
+		log.Println(">>> [loginHandler] => POST /login")
+	
+		// 1) Gelen JSON'u map[string]interface{} tipinde al
+		var reqBody = make(map[string]interface{})
+		if err := c.BodyParser(&reqBody); err != nil {
+			log.Println("    Could not parse body:", err)
+			return c.Status(fiber.StatusBadRequest).
+				JSON(fiber.Map{"error": "Invalid request format"})
+		}
+	
+		// 2) username & password değerlerini string'e dönüştür
+		username, okU := reqBody["username"].(string)
+		password, okP := reqBody["password"].(string)
+		if !okU || !okP || username == "" || password == "" {
+			log.Println("    username/password tip veya değer hatası")
+			return c.Status(fiber.StatusBadRequest).
+				JSON(fiber.Map{"error": "Invalid username or password"})
+		}
+		log.Printf("    RAW INPUT => username=%v password=%v", username, password)
+	
+		// 3) MongoDB'de kullanıcıyı doğrula
+		usersColl := getUserCollection()
+		var user User
+		filter := bson.M{"Username": username, "Password": password}
+	
+		if err := usersColl.FindOne(context.TODO(), filter).Decode(&user); err != nil {
+			log.Printf("Login failed: %v", err)
+			return c.Status(fiber.StatusUnauthorized).
+				JSON(fiber.Map{"error": "Invalid username or password"})
+		}
+	
+		// 4) Kullanıcı bulundu: cookie set et
+		c.Cookie(&fiber.Cookie{
+			Name:    "userID",
+			Value:   user.ID.Hex(),
+			Expires: time.Now().Add(24 * time.Hour),
+		})
+		c.Cookie(&fiber.Cookie{
+			Name:    "Username",
+			Value:   user.Username,
+			Expires: time.Now().Add(24 * time.Hour),
+		})
+		log.Printf("Login successful: username=%s (role=%s)", user.Username, user.Role)
+	
+		// 5) JWT oluştur
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"username": user.Username,
+			"role":     user.Role,
+			// 1 saat sonra token süresi dolsun
+			"exp":      time.Now().Add(time.Hour * 1).Unix(),
+		})
+		signedToken, err := token.SignedString(jwtSecret)
+		if err != nil {
+			log.Println("    Failed to sign token:", err)
+			return c.Status(fiber.StatusInternalServerError).
+				JSON(fiber.Map{"error": "Token creation failed"})
+		}
+		log.Println("    => JWT token created for user:", user.Username)
+	
+		// 6) Kullanıcının rolüne göre yönlendirme yapalım
+		//    Zafiyetli şekilde token'ı URL parametresi olarak ekliyoruz
+		randomIDStr := strconv.Itoa(user.RandomID)
+		if user.Role == "seller" {
+			// Örnek: /my-products?id=999&token=eyJhbGci...
+			return c.Redirect("/my-products?id=" + randomIDStr + "&token=" + signedToken)
+		}
+	
+		// Role "seller" değilse products sayfasına yönlendir
+		return c.Redirect("/products?id=" + randomIDStr + "&token=" + signedToken)
+	}
+	
 
 func loginPageHandler(c *fiber.Ctx) error {
 	return c.SendFile("templates/login.html")
@@ -1426,7 +1577,7 @@ func main() {
 	})
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://172.20.10.1:5000",
+		AllowOrigins:     "http://10.10.11.18:5000",
 		AllowCredentials: true,
 	}))
 
@@ -1437,14 +1588,24 @@ func main() {
 	app.Static("/", "templates")
 	app.Static("/uploads", "./uploads")
 	app.Get("/", loginPageHandler)
+
+
 	app.Get("/login", loginPageHandler)
+
+	app.Get("/secure-products", JWTMiddleware(), jwtProtectedEndpoint)
+
 	app.Post("/login", loginHandler)
+
+	app.Post("/login-jwt", getJWTTokenHandler)
+
 	app.Get("/register", func(c *fiber.Ctx) error {
 		return c.Render("register", nil)
 	})
 	app.Post("/register", registerHandler)
 	app.Post("/logout", logoutHandler)
 	app.Use(AuthMiddleware)
+
+	//burası ssrf testi için
 	app.Get("/ssrf-test", ssrfExample)
 
 	app.Post("/add-to-cart", AuthMiddleware, addToCart)
@@ -1461,14 +1622,15 @@ func main() {
 	app.Get("/products", getProducts)
 	app.Get("/orders", getOrders)
 	app.All("/my-orders", getMyOrders)
-	app.Get("/:id", getFile)
-	app.Post("/:id", getFile)
 	app.Get("/addresses", getAddresses)
 	app.Post("/addresses", addAddress)
 	app.Get("/cards", getCards)
 	app.Post("/cards", addCard)
-	log.Println("Server is running on http://172.20.10.1:5000")
+	app.Get("/:id", getFile)
+	app.Post("/:id", getFile)
+	log.Println("Server is running on http://10.10.11.18:5000")
 	if err := app.Listen(":5000"); err != nil {
 		log.Fatal(err)
 	}
 }
+

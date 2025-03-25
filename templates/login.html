@@ -94,14 +94,14 @@
       // Payload
       const loginData = { username, password };
 
-      fetch('http://172.20.10.6:5000/login', {
+      fetch('http://10.10.11.18:5000/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginData)
       })
       .then(response => {
         if (response.redirected) {
-          // Sunucu 302 döndürdü => response.redirected = true
+          
           window.location.href = response.url;
           return;
         } else {
@@ -110,11 +110,11 @@
         }
       })
       .then(data => {
-        if (!data) return; // eğer redirect olmuşsa data yok
+        if (!data) return; 
         if (data.error) {
           alert(data.error);
         } else {
-          // Belki data.token vb. 
+          
           alert("Unhandled JSON: " + JSON.stringify(data));
         }
       })
