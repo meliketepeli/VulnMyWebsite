@@ -94,7 +94,7 @@
       // Payload
       const loginData = { username, password };
 
-      fetch('http://10.10.11.18:5000/login', {
+      fetch('http://192.168.1.101:5000/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginData)

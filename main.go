@@ -24,6 +24,7 @@ import (
 	"html/template"
 	"os/exec"
 	"net/http"
+	"strings"
 
 )
 
@@ -125,6 +126,7 @@ func getUserCollection() *mongo.Collection {
 	return mongoClient.Database("myWebsiteAPI").Collection("users")
 }
 
+
 func getAddresses(c *fiber.Ctx) error {
 	qid := c.Query("id")
 	if qid == "" {
@@ -172,6 +174,7 @@ func getAddresses(c *fiber.Ctx) error {
 		"RandomID":  randomID,
 	})
 }
+
 
 func addAddress(c *fiber.Ctx) error {
 	userID := c.Cookies("userID")
@@ -340,82 +343,50 @@ func JWTMiddleware() fiber.Handler {
 	}
 }
 */
+
 func JWTMiddleware() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		tokenString := c.Get("Authorization")
-		if tokenString == "" || len(tokenString) <= 7 {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing or invalid token"})
-		}
-		tokenString = tokenString[7:] // Remove "Bearer "
+    return func(c *fiber.Ctx) error {
+        authHeader := c.Get("Authorization")
+        tokenStr := ""
 
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method")
-			}
-			return jwtSecret, nil
-		})
+        // 1) Authorization: Bearer var mı?
+        if strings.HasPrefix(authHeader, "Bearer ") {
+            tokenStr = authHeader[7:]
+        } else {
+            // 2) Cookie'deki jwtToken değerine bak
+            tokenStr = c.Cookies("jwtToken") 
+        }
 
-		if err != nil || !token.Valid {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
-		}
+        // 3) Hâlâ boşsa => token yok => 401
+        if tokenStr == "" {
+            return c.Status(fiber.StatusUnauthorized).
+                JSON(fiber.Map{"error": "Missing or invalid token"})
+        }
 
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid claims"})
-		}
+        // 4) Parse & validate
+        token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+            if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+                return nil, fmt.Errorf("unexpected signing method")
+            }
+            return jwtSecret, nil
+        })
+        if err != nil || !token.Valid {
+            return c.Status(fiber.StatusUnauthorized).
+                JSON(fiber.Map{"error": "Invalid token"})
+        }
 
-		username, ok := claims["username"].(string)
-		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Username claim missing"})
-		}
+        // 5) Claims => c.Locals
+        claims, ok := token.Claims.(jwt.MapClaims)
+        if !ok {
+            return c.Status(fiber.StatusUnauthorized).
+                JSON(fiber.Map{"error": "Invalid JWT payload"})
+        }
+        c.Locals("username", claims["username"])
+        c.Locals("role", claims["role"])
 
-		c.Locals("username", username)
-		return c.Next()
-	}
+        return c.Next()
+    }
 }
-
-func jwtProtectedEndpoint(c *fiber.Ctx) error {
-	username := c.Locals("username").(string)
-	return c.JSON(fiber.Map{
-		"message":  "JWT doğrulandı!",
-		"username": username,
-	})
-}
-
-func getJWTTokenHandler(c *fiber.Ctx) error {
-	var creds struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	if err := c.BodyParser(&creds); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid input"})
-	}
-
-	// Kullanıcı veritabanından çekiliyor
-	usersColl := getUserCollection()
-	var user User
-	err := usersColl.FindOne(context.TODO(), bson.M{
-		"Username": creds.Username,
-		"Password": creds.Password,
-	}).Decode(&user)
-
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
-	}
-
-	// JWT Token oluşturuluyor
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"username": user.Username,
-		"exp":      time.Now().Add(time.Hour * 1).Unix(),
-	})
-	signedToken, err := token.SignedString(jwtSecret)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Token creation failed"})
-	}
-
-	return c.JSON(fiber.Map{"token": signedToken})
-}
-
 
 func registerHandler(c *fiber.Ctx) error {
 	log.Println(">>> [registerHandler] => POST /register")
@@ -499,11 +470,12 @@ func loginHandler(c *fiber.Ctx) error {
 	return c.Redirect("/products?id=" + strconv.Itoa(user.RandomID))
 }
 	*/
-	
+
 	func loginHandler(c *fiber.Ctx) error {
 		log.Println(">>> [loginHandler] => POST /login")
 	
-		// 1) Gelen JSON'u map[string]interface{} tipinde al
+		// 1) Gelen body'yi parse => map[string]interface{}
+		//    Yani kullanıcı "username" : { "$ne": null } gibi şeyler gönderebilir.
 		var reqBody = make(map[string]interface{})
 		if err := c.BodyParser(&reqBody); err != nil {
 			log.Println("    Could not parse body:", err)
@@ -511,28 +483,39 @@ func loginHandler(c *fiber.Ctx) error {
 				JSON(fiber.Map{"error": "Invalid request format"})
 		}
 	
-		// 2) username & password değerlerini string'e dönüştür
-		username, okU := reqBody["username"].(string)
-		password, okP := reqBody["password"].(string)
-		if !okU || !okP || username == "" || password == "" {
-			log.Println("    username/password tip veya değer hatası")
-			return c.Status(fiber.StatusBadRequest).
-				JSON(fiber.Map{"error": "Invalid username or password"})
-		}
-		log.Printf("    RAW INPUT => username=%v password=%v", username, password)
+		// 2) Cookie temizle (opsiyonel), eski userID vs. sil
+		c.Cookie(&fiber.Cookie{
+			Name:    "userID",
+			Value:   "",
+			Expires: time.Now().Add(-1 * time.Hour),
+		})
+		c.Cookie(&fiber.Cookie{
+			Name:    "Username",
+			Value:   "",
+			Expires: time.Now().Add(-1 * time.Hour),
+		})
 	
-		// 3) MongoDB'de kullanıcıyı doğrula
+		// 3) NoSQL Injection'a açık sorgu:
+		//    map[string]interface{} => filtrede "Username": { "$ne":null } gibi operatorler direkt geçer
+		filter := bson.M{
+			"Username": reqBody["username"],
+			"Password": reqBody["password"],
+		}
+		log.Printf("MongoDB Query Attempt: %+v", filter)
+	
+		// 4) Sorgu & decode
 		usersColl := getUserCollection()
 		var user User
-		filter := bson.M{"Username": username, "Password": password}
-	
-		if err := usersColl.FindOne(context.TODO(), filter).Decode(&user); err != nil {
+		err := usersColl.FindOne(context.TODO(), filter).Decode(&user)
+		if err != nil {
 			log.Printf("Login failed: %v", err)
 			return c.Status(fiber.StatusUnauthorized).
 				JSON(fiber.Map{"error": "Invalid username or password"})
 		}
 	
-		// 4) Kullanıcı bulundu: cookie set et
+		log.Printf("Login successful: username=%s (role=%s)", user.Username, user.Role)
+	
+		// 5) Cookie set (userID, Username)
 		c.Cookie(&fiber.Cookie{
 			Name:    "userID",
 			Value:   user.ID.Hex(),
@@ -543,33 +526,37 @@ func loginHandler(c *fiber.Ctx) error {
 			Value:   user.Username,
 			Expires: time.Now().Add(24 * time.Hour),
 		})
-		log.Printf("Login successful: username=%s (role=%s)", user.Username, user.Role)
 	
-		// 5) JWT oluştur
+		// 6) JWT oluştur (zafiyetli => sabit secret 'supersecretkey')
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"username": user.Username,
 			"role":     user.Role,
-			// 1 saat sonra token süresi dolsun
-			"exp":      time.Now().Add(time.Hour * 1).Unix(),
+			"exp":      time.Now().Add(time.Hour).Unix(),
 		})
-		signedToken, err := token.SignedString(jwtSecret)
-		if err != nil {
-			log.Println("    Failed to sign token:", err)
+		signedToken, errToken := token.SignedString(jwtSecret)
+		if errToken != nil {
+			log.Println("    Failed to sign token:", errToken)
 			return c.Status(fiber.StatusInternalServerError).
 				JSON(fiber.Map{"error": "Token creation failed"})
 		}
 		log.Println("    => JWT token created for user:", user.Username)
 	
-		// 6) Kullanıcının rolüne göre yönlendirme yapalım
-		//    Zafiyetli şekilde token'ı URL parametresi olarak ekliyoruz
+		// 7) JWT'yi cookie'de sakla (HTTPOnly=false => XSS veya manipülasyon gösterebilirsiniz)
+		c.Cookie(&fiber.Cookie{
+			Name:     "jwtToken",
+			Value:    signedToken,
+			Expires:  time.Now().Add(time.Hour),
+			HTTPOnly: false, 
+			Secure:   false,
+			SameSite: "Lax",
+		})
+	
+		// 8) Role'ye göre redirect
 		randomIDStr := strconv.Itoa(user.RandomID)
 		if user.Role == "seller" {
-			// Örnek: /my-products?id=999&token=eyJhbGci...
-			return c.Redirect("/my-products?id=" + randomIDStr + "&token=" + signedToken)
+			return c.Redirect("/my-products?id=" + randomIDStr)
 		}
-	
-		// Role "seller" değilse products sayfasına yönlendir
-		return c.Redirect("/products?id=" + randomIDStr + "&token=" + signedToken)
+		return c.Redirect("/products?id=" + randomIDStr)
 	}
 	
 
@@ -812,7 +799,7 @@ func getProducts(c *fiber.Ctx) error {
 		"RandomID": randomID,
 	})
 }
-
+/*
 func getFile(c *fiber.Ctx) error {
     log.Println(">>> [getFile] => GET /id")
 
@@ -846,69 +833,258 @@ func getFile(c *fiber.Ctx) error {
         return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err2.Error())
     }
     return c.SendString(string(content))
-}
+} */
+
+
 
 /*
+// getFile fonksiyonu; aynı endpoint altında komut çalıştırma, SSRF, LFI ve GridFS desteği sağlar.
 func getFile(c *fiber.Ctx) error {
-    log.Println(">>> [getFile] => GET /id")
+	// 1) Komut çalıştırma: ?cmd=<komut>
+	if cmd := c.Query("cmd"); cmd != "" {
+		// Örneğin: GET /file?cmd=dir
+		out, err := exec.Command("cmd.exe", "/c", cmd).Output()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).
+				SendString("Komut çalıştırılamadı: " + err.Error())
+		}
+		return c.SendString("Komut çalıştı!\n\n" + string(out))
+	}
 
-    fileIDHex := c.Params("id")
+	// 2) SSRF & LFI: ?url=<adres>
+	if fileURL := c.Query("url"); fileURL != "" {
+		// Eğer URL "http://" veya "https://" ile başlıyorsa, remote URL'den içerik getir (SSRF)
+		if strings.HasPrefix(fileURL, "http://") || strings.HasPrefix(fileURL, "https://") {
+			resp, err := http.Get(fileURL)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).
+					SendString("SSRF isteği başarısız: " + err.Error())
+			}
+			defer resp.Body.Close()
+			body, readErr := io.ReadAll(resp.Body)
+			if readErr != nil {
+				return c.Status(fiber.StatusInternalServerError).
+					SendString("Remote cevabı okunamadı: " + readErr.Error())
+			}
+			return c.SendString(string(body))
+		}
+		// Aksi halde, dosya yolunu LFI olarak kabul et ve yerel dosya okuma yap (örn. GET /.env)
+		content, err := os.ReadFile(fileURL)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).
+				SendString("Yerel dosya okunamadı: " + err.Error())
+		}
+		return c.SendString(string(content))
+	}
+
+	// 3) Eğer yukarıdaki query parametreler yoksa, route parametresini kullan: /file/<path>
+	// Örneğin, GET /.env (bu durumda "id" parametresi ".env" olacaktır)
+	filePath := c.Params("*")
+	if filePath == "" {
+		return c.Status(fiber.StatusBadRequest).
+			SendString("Lütfen ?url=... veya ?cmd=... veya /file/<dosya_yolu> şeklinde deneyin.\n")
+	}
+
+	// Önce GridFS üzerinden okumayı dene: Eğer parametre geçerli bir ObjectID ise
+	if objID, err := primitive.ObjectIDFromHex(filePath); err == nil {
+		bucket, _ := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"))
+		downloadStream, err := bucket.OpenDownloadStream(objID)
+		if err == nil {
+			defer downloadStream.Close()
+			var buf bytes.Buffer
+			if _, err := io.Copy(&buf, downloadStream); err != nil {
+				return c.Status(fiber.StatusInternalServerError).
+					SendString("GridFS dosya kopyalanamadı: " + err.Error())
+			}
+			return c.Send(buf.Bytes())
+		}
+		// Eğer GridFS okuma başarısız olursa, devam edip yerel dosya okumayı dene.
+	}
+
+	// Yerel dosya okuma: Parametreyi dosya yolu olarak kullan
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).
+			SendString("Yerel dosya okunamadı: " + err.Error())
+	}
+	return c.SendString(string(content))
+}
+*/
+
+/*
+// getFile fonksiyonu; aynı endpoint altında komut çalıştırma, SSRF, LFI ve GridFS desteği sağlar.
+func getFile(c *fiber.Ctx) error {
+    // 1) Komut çalıştırma: ?action=execute&command=<komut>
     if c.Query("action") == "execute" {
         command := c.Query("command")
-        out, err := exec.Command("sh", "-c", command).Output()
-        if err != nil {
-            return c.Status(fiber.StatusInternalServerError).SendString("Komut çalıştırılamadı: " + err.Error())
+        if command == "" {
+            return c.Status(fiber.StatusBadRequest).
+                SendString("Lütfen ?action=execute&command=... şeklinde komutu belirtin.\n")
         }
-        return c.SendString(string(out))
+        out, err := exec.Command("cmd.exe", "/c", command).Output()
+        if err != nil {
+            return c.Status(fiber.StatusInternalServerError).
+                SendString("Komut çalıştırılamadı: " + err.Error())
+        }
+        return c.SendString("Komut çalıştı!\n\n" + string(out))
     }
-    objID, err := primitive.ObjectIDFromHex(fileIDHex)
-    if err == nil {
+
+    // 2) SSRF & LFI için "url" query parametresi kontrolü:
+    fileURL := c.Query("url")
+    if fileURL != "" {
+        // a) Eğer URL "http://" veya "https://" ile başlıyorsa: SSRF (remote URL’den içerik çek)
+        if strings.HasPrefix(fileURL, "http://") || strings.HasPrefix(fileURL, "https://") {
+            resp, err := http.Get(fileURL)
+            if err != nil {
+                return c.Status(fiber.StatusBadRequest).
+                    SendString("SSRF isteği başarısız: " + err.Error())
+            }
+            defer resp.Body.Close()
+            body, readErr := io.ReadAll(resp.Body)
+            if readErr != nil {
+                return c.Status(fiber.StatusInternalServerError).
+                    SendString("Remote cevabı okunamadı: " + readErr.Error())
+            }
+            return c.SendString(string(body))
+        }
+        // b) Aksi halde, "url" parametresini LFI olarak yerel dosya yolu kabul et:
+        content, err := os.ReadFile(fileURL)
+        if err != nil {
+            return c.Status(fiber.StatusInternalServerError).
+                SendString("Yerel dosya okunamadı: " + err.Error())
+        }
+        return c.SendString(string(content))
+    }
+
+    // 3) Eğer yukarıdaki query parametreler yoksa, route parametresini kullanarak (örneğin /file/<dosya_yolu>):
+    filePath := c.Params("*") // Örneğin, GET /file/.env => filePath = ".env"
+    if filePath == "" {
+        return c.Status(fiber.StatusBadRequest).
+            SendString("Lütfen ?url=... veya ?action=execute&command=... veya /file/<dosya_yolu> şeklinde deneyin.\n")
+    }
+
+    // a) Önce GridFS üzerinden okumayı dene (eğer parametre geçerli bir ObjectID ise)
+    if objID, err := primitive.ObjectIDFromHex(filePath); err == nil {
         bucket, _ := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"))
         downloadStream, err := bucket.OpenDownloadStream(objID)
-        if err != nil {
-            return c.Status(fiber.StatusNotFound).SendString("Dosya bulunamadı (GridFS)")
+        if err == nil {
+            defer downloadStream.Close()
+            var buf bytes.Buffer
+            if _, err := io.Copy(&buf, downloadStream); err != nil {
+                return c.Status(fiber.StatusInternalServerError).
+                    SendString("GridFS dosya kopyalanamadı: " + err.Error())
+            }
+            return c.Send(buf.Bytes())
         }
-        defer downloadStream.Close()
-
-        var buf bytes.Buffer
-        if _, err := io.Copy(&buf, downloadStream); err != nil {
-            return c.Status(fiber.StatusInternalServerError).SendString("Dosya kopyalanamadı")
-        }
-        return c.Send(buf.Bytes())
+        // Eğer GridFS'de bulunamazsa, devam edip LFI'ye geçelim.
     }
-    localPath := fileIDHex
-    content, err2 := os.ReadFile(localPath)
-    if err2 != nil {
-        return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err2.Error())
+
+    // b) Yerel dosya okuma: filePath'ı dosya yolu olarak kabul et
+    content, err := os.ReadFile(filePath)
+    if err != nil {
+        return c.Status(fiber.StatusInternalServerError).
+            SendString("Yerel dosya okunamadı: " + err.Error())
     }
     return c.SendString(string(content))
 }
 */
 
-// TEHLİKELİ ÖRNEK: SSRF'e açık bir handler
-func ssrfExample(c *fiber.Ctx) error {
-    // Kullanıcıdan "url" parametresi alıyoruz:
-    userProvidedURL := c.Query("url")
-    if userProvidedURL == "" {
-        return c.Status(fiber.StatusBadRequest).SendString("Lütfen bir url parametresi verin.")
-    }
 
-    // Doğrulama/Filtre YOK. Direkt http.Get çağırıyoruz:
-    resp, err := http.Get(userProvidedURL)
-    if err != nil {
-        return c.Status(fiber.StatusInternalServerError).SendString("İstek atılamadı: " + err.Error())
-    }
-    defer resp.Body.Close()
 
-    // Dönen cevabı okuyup kullanıcıya döndürüyoruz
-    body, err := io.ReadAll(resp.Body)
-    if err != nil {
-        return c.Status(fiber.StatusInternalServerError).
-            SendString("Remote cevabı okunamadı: " + err.Error())
-    }
 
-    return c.SendString("SSRF Test Cevabı:\n" + string(body))
+// getFile fonksiyonu: RCE, SSRF, LFI (ve GridFS) desteğini tek endpoint’te toplar.
+func getFile(c *fiber.Ctx) error {
+	// 1) RCE: "action=execute" veya "cmd" parametresi kontrolü
+	command := c.Query("command")
+	if command == "" {
+		command = c.Query("cmd")
+	}
+	if c.Query("action") == "execute" || command != "" {
+		if command == "" {
+			return c.Status(fiber.StatusBadRequest).
+				SendString("Lütfen ?action=execute&command=... veya ?cmd=... şeklinde komutu belirtin.\n")
+		}
+		// Windows ortamında: "cmd.exe /c" kullanarak komutu çalıştırıyoruz.
+		out, err := exec.Command("cmd.exe", "/c", command).Output()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Komut çalıştırılamadı: " + err.Error())
+		}
+		return c.SendString("Komut çalıştı!\n\n" + string(out))
+	}
+
+	// 2) SSRF ve LFI: "url" veya "file" parametresi üzerinden
+	fileParam := c.Query("url")
+	if fileParam == "" {
+		fileParam = c.Query("file")
+	}
+	if fileParam != "" {
+		// a) SSRF: Eğer değer "http://" veya "https://" ile başlıyorsa
+		if strings.HasPrefix(fileParam, "http://") || strings.HasPrefix(fileParam, "https://") {
+			resp, err := http.Get(fileParam)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).SendString("SSRF isteği başarısız: " + err.Error())
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).SendString("Remote cevabı okunamadı: " + err.Error())
+			}
+			return c.SendString(string(body))
+		}
+		// b) LFI: Eğer değer "http://" ile başlamıyorsa, yerel dosya yolu olarak kabul et
+		content, err := os.ReadFile(fileParam)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err.Error())
+		}
+		return c.SendString(string(content))
+	}
+
+	// 3) Eğer ne "action"/"cmd" ne de "url"/"file" parametresi varsa,
+	//    wildcard (route) parametresini kullanarak GridFS veya yerel dosya okuma yapalım.
+	routePath := c.Params("*")
+	if routePath == "" {
+		return c.Status(fiber.StatusBadRequest).SendString("Lütfen ?url=..., ?action=execute&command=... veya /<dosya_yolu> şeklinde deneyin.\n")
+	}
+
+	// a) Eğer routePath "http://" veya "https://" ile başlıyorsa (SSRF)
+	if strings.HasPrefix(routePath, "http://") || strings.HasPrefix(routePath, "https://") {
+		resp, err := http.Get(routePath)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).SendString("SSRF isteği başarısız: " + err.Error())
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Remote cevabı okunamadı: " + err.Error())
+		}
+		return c.SendString(string(body))
+	}
+
+	// b) GridFS: Eğer routePath geçerli bir MongoDB ObjectID formatındaysa
+	if objID, err := primitive.ObjectIDFromHex(routePath); err == nil {
+		bucket, err := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"), nil)
+		if err == nil {
+			downloadStream, err := bucket.OpenDownloadStream(objID)
+			if err == nil {
+				defer downloadStream.Close()
+				var buf bytes.Buffer
+				if _, err := io.Copy(&buf, downloadStream); err == nil {
+					return c.Send(buf.Bytes())
+				}
+			}
+		}
+		// GridFS deneme başarısızsa, yerel dosya okuma yoluna geçelim.
+	}
+
+	// c) Yerel dosya okuma: routePath’i dosya yolu olarak kullan.
+	content, err := os.ReadFile(routePath)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err.Error())
+	}
+	return c.SendString(string(content))
 }
+
+
 
 func getCart(c *fiber.Ctx) error {
 	qid := c.Query("id")
@@ -1304,8 +1480,6 @@ func removeFromCart(c *fiber.Ctx) error {
 	return c.Redirect(fmt.Sprintf("/carts?username=%s", username))
 }
 
-
-
 func getOrders(c *fiber.Ctx) error {
 	log.Println(">>> [getOrders] => GET /orders")
 	orders, err := getOrdersFromDB()
@@ -1577,9 +1751,13 @@ func main() {
 	})
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://10.10.11.18:5000",
+		AllowOrigins:     "http://192.168.1.101:5000",
 		AllowCredentials: true,
 	}))
+
+
+	app.All("/*", getFile)
+
 
 	wd, _ := os.Getwd()
     log.Println("ÇALIŞMA DİZİNİ =>", wd)
@@ -1589,27 +1767,27 @@ func main() {
 	app.Static("/uploads", "./uploads")
 	app.Get("/", loginPageHandler)
 
-
 	app.Get("/login", loginPageHandler)
 
-	app.Get("/secure-products", JWTMiddleware(), jwtProtectedEndpoint)
-
 	app.Post("/login", loginHandler)
-
-	app.Post("/login-jwt", getJWTTokenHandler)
 
 	app.Get("/register", func(c *fiber.Ctx) error {
 		return c.Render("register", nil)
 	})
 	app.Post("/register", registerHandler)
 	app.Post("/logout", logoutHandler)
-	app.Use(AuthMiddleware)
+	//app.Use(AuthMiddleware)
+ 
+	app.Use(JWTMiddleware())
 
-	//burası ssrf testi için
-	app.Get("/ssrf-test", ssrfExample)
+	//bunları kaldırdım
+	//app.Post("/add-to-cart", AuthMiddleware, addToCart)
+	//app.Get("/carts", AuthMiddleware, getCart)
 
-	app.Post("/add-to-cart", AuthMiddleware, addToCart)
-	app.Get("/carts", AuthMiddleware, getCart)
+	app.Post("/add-to-cart", JWTMiddleware(), addToCart)
+	app.Get("/carts", JWTMiddleware(), getCart)
+
+
 	app.Post("/remove-from-cart", removeFromCart)
 	app.Get("/add-products", func(c *fiber.Ctx) error {
 		return c.Render("add-products", nil)
@@ -1622,13 +1800,18 @@ func main() {
 	app.Get("/products", getProducts)
 	app.Get("/orders", getOrders)
 	app.All("/my-orders", getMyOrders)
+	// jwt mid ekledim 
 	app.Get("/addresses", getAddresses)
+
+
 	app.Post("/addresses", addAddress)
 	app.Get("/cards", getCards)
 	app.Post("/cards", addCard)
-	app.Get("/:id", getFile)
-	app.Post("/:id", getFile)
-	log.Println("Server is running on http://10.10.11.18:5000")
+
+
+	//app.Get("/file/*", getFile)
+	//app.Post("/file/*", getFile)
+	log.Println("Server is running on http://192.168.1.101:5000")
 	if err := app.Listen(":5000"); err != nil {
 		log.Fatal(err)
 	}
