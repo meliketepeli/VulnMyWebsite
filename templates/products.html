@@ -123,6 +123,7 @@
     {{ if .Products }}
       {{ range .Products }}
       <div class="product-card">
+        <!-- 
         {{ if eq $.UserRole "user" }}
           <a href="{{ .ImageURL }}" target="_blank">
             <img src="{{ .ImageURL }}" alt="Product Image">
@@ -130,6 +131,17 @@
         {{ else }}
           <img src="{{ .ImageURL }}" alt="Product Image">
         {{ end }}
+
+        -->
+
+        {{ if eq $.UserRole "user" }}
+  <a href="{{ .ImageURL }}?ts={{.ID.Hex}}&random={{ Now }}" target="_blank">
+    <img src="{{ .ImageURL }}?ts={{.ID.Hex}}&random={{ Now}}" alt="Product Image">
+  </a>
+{{ else }}
+  <img src="{{ .ImageURL }}" alt="Product Image">
+{{ end }}
+
         <h3>{{ .Name }}</h3>
         <p>{{ .Description }}</p>
         <p><strong>Stock:</strong> {{ .Quantity }}</p>

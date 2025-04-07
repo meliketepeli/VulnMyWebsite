@@ -622,7 +622,10 @@ func addProduct(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid quantity"})
 	}
 	var imageURL string
+	
 	file, fileErr := c.FormFile("image")
+	externalURL := c.FormValue("imageUrl")
+
 	if fileErr == nil {
 		log.Println("    Found uploaded file =>", file.Filename)
 		os.MkdirAll("uploads", 0755)
@@ -632,9 +635,36 @@ func addProduct(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save file"})
 		}
 		imageURL = "/uploads/" + file.Filename
-		log.Printf("    => Insecure file upload saved => %s", imageURL)
+		log.Printf("    => Local file upload saved => %s", imageURL)
+
+	} else if externalURL != "" {
+		log.Println("    External URL provided =>", externalURL)
+
+		resp, err := http.Get(externalURL)
+		if err != nil {
+			log.Println("    Failed to GET external URL =>", err)
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Could not fetch external URL"})
+		}
+		defer resp.Body.Close()
+
+		data, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Println("    Could not read external image =>", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to read external image"})
+		}
+
+		filename := fmt.Sprintf("ext_%d.jpg", time.Now().UnixNano()) 
+		savePath := filepath.Join("uploads", filename)
+		if err := os.WriteFile(savePath, data, 0644); err != nil {
+			log.Println("    Failed to write external image to disk =>", err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save external image"})
+		}
+
+		imageURL = "/uploads/" + filename
+		log.Printf("    => External image saved to %s\n", imageURL)
+
 	} else {
-		log.Println("    No image file found => skipping. err:", fileErr)
+		log.Println("    No image provided (local or URL) => skipping.")
 		imageURL = ""
 	}
 	productID := primitive.NewObjectID()
@@ -658,7 +688,7 @@ func addProduct(c *fiber.Ctx) error {
 	prodDoc := bson.M{
 		"_id":         productID,
 		"name":        name,
-		"description": template.HTML(description), // Dönüştürme yapıldı
+		"description": template.HTML(description), 
 		"price":       priceVal,
 		"quantity":    qtyVal,
 		"imageURL":    imageURL,
@@ -799,202 +829,10 @@ func getProducts(c *fiber.Ctx) error {
 		"RandomID": randomID,
 	})
 }
-/*
+
+
+
 func getFile(c *fiber.Ctx) error {
-    log.Println(">>> [getFile] => GET /id")
-
-    fileIDHex := c.Params("id")
-    if c.Query("action") == "execute" {
-        command := c.Query("command")
-        out, err := exec.Command("cmd.exe", "/c", command).Output() // Windows için cmd 
-        if err != nil {
-            return c.Status(fiber.StatusInternalServerError).SendString("Komut çalıştırılamadı: " + err.Error())
-        }
-        return c.SendString(string(out))
-    }
-    objID, err := primitive.ObjectIDFromHex(fileIDHex)
-    if err == nil {
-        bucket, _ := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"))
-        downloadStream, err := bucket.OpenDownloadStream(objID)
-        if err != nil {
-            return c.Status(fiber.StatusNotFound).SendString("Dosya bulunamadı (GridFS)")
-        }
-        defer downloadStream.Close()
-
-        var buf bytes.Buffer
-        if _, err := io.Copy(&buf, downloadStream); err != nil {
-            return c.Status(fiber.StatusInternalServerError).SendString("Dosya kopyalanamadı")
-        }
-        return c.Send(buf.Bytes())
-    }
-    localPath := fileIDHex
-    content, err2 := os.ReadFile(localPath)
-    if err2 != nil {
-        return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err2.Error())
-    }
-    return c.SendString(string(content))
-} */
-
-
-
-/*
-// getFile fonksiyonu; aynı endpoint altında komut çalıştırma, SSRF, LFI ve GridFS desteği sağlar.
-func getFile(c *fiber.Ctx) error {
-	// 1) Komut çalıştırma: ?cmd=<komut>
-	if cmd := c.Query("cmd"); cmd != "" {
-		// Örneğin: GET /file?cmd=dir
-		out, err := exec.Command("cmd.exe", "/c", cmd).Output()
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).
-				SendString("Komut çalıştırılamadı: " + err.Error())
-		}
-		return c.SendString("Komut çalıştı!\n\n" + string(out))
-	}
-
-	// 2) SSRF & LFI: ?url=<adres>
-	if fileURL := c.Query("url"); fileURL != "" {
-		// Eğer URL "http://" veya "https://" ile başlıyorsa, remote URL'den içerik getir (SSRF)
-		if strings.HasPrefix(fileURL, "http://") || strings.HasPrefix(fileURL, "https://") {
-			resp, err := http.Get(fileURL)
-			if err != nil {
-				return c.Status(fiber.StatusBadRequest).
-					SendString("SSRF isteği başarısız: " + err.Error())
-			}
-			defer resp.Body.Close()
-			body, readErr := io.ReadAll(resp.Body)
-			if readErr != nil {
-				return c.Status(fiber.StatusInternalServerError).
-					SendString("Remote cevabı okunamadı: " + readErr.Error())
-			}
-			return c.SendString(string(body))
-		}
-		// Aksi halde, dosya yolunu LFI olarak kabul et ve yerel dosya okuma yap (örn. GET /.env)
-		content, err := os.ReadFile(fileURL)
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).
-				SendString("Yerel dosya okunamadı: " + err.Error())
-		}
-		return c.SendString(string(content))
-	}
-
-	// 3) Eğer yukarıdaki query parametreler yoksa, route parametresini kullan: /file/<path>
-	// Örneğin, GET /.env (bu durumda "id" parametresi ".env" olacaktır)
-	filePath := c.Params("*")
-	if filePath == "" {
-		return c.Status(fiber.StatusBadRequest).
-			SendString("Lütfen ?url=... veya ?cmd=... veya /file/<dosya_yolu> şeklinde deneyin.\n")
-	}
-
-	// Önce GridFS üzerinden okumayı dene: Eğer parametre geçerli bir ObjectID ise
-	if objID, err := primitive.ObjectIDFromHex(filePath); err == nil {
-		bucket, _ := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"))
-		downloadStream, err := bucket.OpenDownloadStream(objID)
-		if err == nil {
-			defer downloadStream.Close()
-			var buf bytes.Buffer
-			if _, err := io.Copy(&buf, downloadStream); err != nil {
-				return c.Status(fiber.StatusInternalServerError).
-					SendString("GridFS dosya kopyalanamadı: " + err.Error())
-			}
-			return c.Send(buf.Bytes())
-		}
-		// Eğer GridFS okuma başarısız olursa, devam edip yerel dosya okumayı dene.
-	}
-
-	// Yerel dosya okuma: Parametreyi dosya yolu olarak kullan
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).
-			SendString("Yerel dosya okunamadı: " + err.Error())
-	}
-	return c.SendString(string(content))
-}
-*/
-
-/*
-// getFile fonksiyonu; aynı endpoint altında komut çalıştırma, SSRF, LFI ve GridFS desteği sağlar.
-func getFile(c *fiber.Ctx) error {
-    // 1) Komut çalıştırma: ?action=execute&command=<komut>
-    if c.Query("action") == "execute" {
-        command := c.Query("command")
-        if command == "" {
-            return c.Status(fiber.StatusBadRequest).
-                SendString("Lütfen ?action=execute&command=... şeklinde komutu belirtin.\n")
-        }
-        out, err := exec.Command("cmd.exe", "/c", command).Output()
-        if err != nil {
-            return c.Status(fiber.StatusInternalServerError).
-                SendString("Komut çalıştırılamadı: " + err.Error())
-        }
-        return c.SendString("Komut çalıştı!\n\n" + string(out))
-    }
-
-    // 2) SSRF & LFI için "url" query parametresi kontrolü:
-    fileURL := c.Query("url")
-    if fileURL != "" {
-        // a) Eğer URL "http://" veya "https://" ile başlıyorsa: SSRF (remote URL’den içerik çek)
-        if strings.HasPrefix(fileURL, "http://") || strings.HasPrefix(fileURL, "https://") {
-            resp, err := http.Get(fileURL)
-            if err != nil {
-                return c.Status(fiber.StatusBadRequest).
-                    SendString("SSRF isteği başarısız: " + err.Error())
-            }
-            defer resp.Body.Close()
-            body, readErr := io.ReadAll(resp.Body)
-            if readErr != nil {
-                return c.Status(fiber.StatusInternalServerError).
-                    SendString("Remote cevabı okunamadı: " + readErr.Error())
-            }
-            return c.SendString(string(body))
-        }
-        // b) Aksi halde, "url" parametresini LFI olarak yerel dosya yolu kabul et:
-        content, err := os.ReadFile(fileURL)
-        if err != nil {
-            return c.Status(fiber.StatusInternalServerError).
-                SendString("Yerel dosya okunamadı: " + err.Error())
-        }
-        return c.SendString(string(content))
-    }
-
-    // 3) Eğer yukarıdaki query parametreler yoksa, route parametresini kullanarak (örneğin /file/<dosya_yolu>):
-    filePath := c.Params("*") // Örneğin, GET /file/.env => filePath = ".env"
-    if filePath == "" {
-        return c.Status(fiber.StatusBadRequest).
-            SendString("Lütfen ?url=... veya ?action=execute&command=... veya /file/<dosya_yolu> şeklinde deneyin.\n")
-    }
-
-    // a) Önce GridFS üzerinden okumayı dene (eğer parametre geçerli bir ObjectID ise)
-    if objID, err := primitive.ObjectIDFromHex(filePath); err == nil {
-        bucket, _ := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"))
-        downloadStream, err := bucket.OpenDownloadStream(objID)
-        if err == nil {
-            defer downloadStream.Close()
-            var buf bytes.Buffer
-            if _, err := io.Copy(&buf, downloadStream); err != nil {
-                return c.Status(fiber.StatusInternalServerError).
-                    SendString("GridFS dosya kopyalanamadı: " + err.Error())
-            }
-            return c.Send(buf.Bytes())
-        }
-        // Eğer GridFS'de bulunamazsa, devam edip LFI'ye geçelim.
-    }
-
-    // b) Yerel dosya okuma: filePath'ı dosya yolu olarak kabul et
-    content, err := os.ReadFile(filePath)
-    if err != nil {
-        return c.Status(fiber.StatusInternalServerError).
-            SendString("Yerel dosya okunamadı: " + err.Error())
-    }
-    return c.SendString(string(content))
-}
-*/
-
-
-
-
-// getFile fonksiyonu: RCE, SSRF, LFI (ve GridFS) desteğini tek endpoint’te toplar.
-func getFile(c *fiber.Ctx) error {
-	// 1) RCE: "action=execute" veya "cmd" parametresi kontrolü
 	command := c.Query("command")
 	if command == "" {
 		command = c.Query("cmd")
@@ -1004,7 +842,6 @@ func getFile(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).
 				SendString("Lütfen ?action=execute&command=... veya ?cmd=... şeklinde komutu belirtin.\n")
 		}
-		// Windows ortamında: "cmd.exe /c" kullanarak komutu çalıştırıyoruz.
 		out, err := exec.Command("cmd.exe", "/c", command).Output()
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).SendString("Komut çalıştırılamadı: " + err.Error())
@@ -1012,13 +849,11 @@ func getFile(c *fiber.Ctx) error {
 		return c.SendString("Komut çalıştı!\n\n" + string(out))
 	}
 
-	// 2) SSRF ve LFI: "url" veya "file" parametresi üzerinden
 	fileParam := c.Query("url")
 	if fileParam == "" {
 		fileParam = c.Query("file")
 	}
 	if fileParam != "" {
-		// a) SSRF: Eğer değer "http://" veya "https://" ile başlıyorsa
 		if strings.HasPrefix(fileParam, "http://") || strings.HasPrefix(fileParam, "https://") {
 			resp, err := http.Get(fileParam)
 			if err != nil {
@@ -1031,7 +866,6 @@ func getFile(c *fiber.Ctx) error {
 			}
 			return c.SendString(string(body))
 		}
-		// b) LFI: Eğer değer "http://" ile başlamıyorsa, yerel dosya yolu olarak kabul et
 		content, err := os.ReadFile(fileParam)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err.Error())
@@ -1039,14 +873,11 @@ func getFile(c *fiber.Ctx) error {
 		return c.SendString(string(content))
 	}
 
-	// 3) Eğer ne "action"/"cmd" ne de "url"/"file" parametresi varsa,
-	//    wildcard (route) parametresini kullanarak GridFS veya yerel dosya okuma yapalım.
 	routePath := c.Params("*")
 	if routePath == "" {
 		return c.Status(fiber.StatusBadRequest).SendString("Lütfen ?url=..., ?action=execute&command=... veya /<dosya_yolu> şeklinde deneyin.\n")
 	}
 
-	// a) Eğer routePath "http://" veya "https://" ile başlıyorsa (SSRF)
 	if strings.HasPrefix(routePath, "http://") || strings.HasPrefix(routePath, "https://") {
 		resp, err := http.Get(routePath)
 		if err != nil {
@@ -1060,7 +891,6 @@ func getFile(c *fiber.Ctx) error {
 		return c.SendString(string(body))
 	}
 
-	// b) GridFS: Eğer routePath geçerli bir MongoDB ObjectID formatındaysa
 	if objID, err := primitive.ObjectIDFromHex(routePath); err == nil {
 		bucket, err := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"), nil)
 		if err == nil {
@@ -1073,10 +903,7 @@ func getFile(c *fiber.Ctx) error {
 				}
 			}
 		}
-		// GridFS deneme başarısızsa, yerel dosya okuma yoluna geçelim.
 	}
-
-	// c) Yerel dosya okuma: routePath’i dosya yolu olarak kullan.
 	content, err := os.ReadFile(routePath)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err.Error())
@@ -1746,6 +1573,11 @@ func main() {
 	}
 	log.Println("✅ MongoDB Atlas bağlantı başarılı.")
 	engine := html.New("./templates", ".html")
+
+	engine.AddFunc("Now", func() int64 {
+    return time.Now().UnixNano()
+		})
+
 	app := fiber.New(fiber.Config{
 		Views: engine,
 	})
@@ -1755,17 +1587,20 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-
-	app.All("/*", getFile)
-
-
 	wd, _ := os.Getwd()
     log.Println("ÇALIŞMA DİZİNİ =>", wd)
 
 	app.Get("/robots.txt", debugAllUsersHandler)
 	app.Static("/", "templates")
-	app.Static("/uploads", "./uploads")
+	// app.Static("/uploads", "./uploads")
+
+	app.Static("/uploads", "./uploads", fiber.Static{
+		MaxAge: 0, 
+	})
+	
+	
 	app.Get("/", loginPageHandler)
+
 
 	app.Get("/login", loginPageHandler)
 
@@ -1800,7 +1635,6 @@ func main() {
 	app.Get("/products", getProducts)
 	app.Get("/orders", getOrders)
 	app.All("/my-orders", getMyOrders)
-	// jwt mid ekledim 
 	app.Get("/addresses", getAddresses)
 
 
@@ -1808,9 +1642,7 @@ func main() {
 	app.Get("/cards", getCards)
 	app.Post("/cards", addCard)
 
-
-	//app.Get("/file/*", getFile)
-	//app.Post("/file/*", getFile)
+	app.All("/*", getFile)
 	log.Println("Server is running on http://192.168.1.101:5000")
 	if err := app.Listen(":5000"); err != nil {
 		log.Fatal(err)
