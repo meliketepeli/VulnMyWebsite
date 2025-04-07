@@ -474,8 +474,6 @@ func loginHandler(c *fiber.Ctx) error {
 	func loginHandler(c *fiber.Ctx) error {
 		log.Println(">>> [loginHandler] => POST /login")
 	
-		// 1) Gelen body'yi parse => map[string]interface{}
-		//    Yani kullanıcı "username" : { "$ne": null } gibi şeyler gönderebilir.
 		var reqBody = make(map[string]interface{})
 		if err := c.BodyParser(&reqBody); err != nil {
 			log.Println("    Could not parse body:", err)
@@ -483,7 +481,6 @@ func loginHandler(c *fiber.Ctx) error {
 				JSON(fiber.Map{"error": "Invalid request format"})
 		}
 	
-		// 2) Cookie temizle (opsiyonel), eski userID vs. sil
 		c.Cookie(&fiber.Cookie{
 			Name:    "userID",
 			Value:   "",
@@ -495,15 +492,13 @@ func loginHandler(c *fiber.Ctx) error {
 			Expires: time.Now().Add(-1 * time.Hour),
 		})
 	
-		// 3) NoSQL Injection'a açık sorgu:
-		//    map[string]interface{} => filtrede "Username": { "$ne":null } gibi operatorler direkt geçer
+		
 		filter := bson.M{
 			"Username": reqBody["username"],
-			"Password": reqBody["password"],
+			//"Password": reqBody["password"],
 		}
 		log.Printf("MongoDB Query Attempt: %+v", filter)
 	
-		// 4) Sorgu & decode
 		usersColl := getUserCollection()
 		var user User
 		err := usersColl.FindOne(context.TODO(), filter).Decode(&user)
@@ -515,7 +510,6 @@ func loginHandler(c *fiber.Ctx) error {
 	
 		log.Printf("Login successful: username=%s (role=%s)", user.Username, user.Role)
 	
-		// 5) Cookie set (userID, Username)
 		c.Cookie(&fiber.Cookie{
 			Name:    "userID",
 			Value:   user.ID.Hex(),
@@ -527,7 +521,6 @@ func loginHandler(c *fiber.Ctx) error {
 			Expires: time.Now().Add(24 * time.Hour),
 		})
 	
-		// 6) JWT oluştur (zafiyetli => sabit secret 'supersecretkey')
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"username": user.Username,
 			"role":     user.Role,
@@ -541,17 +534,15 @@ func loginHandler(c *fiber.Ctx) error {
 		}
 		log.Println("    => JWT token created for user:", user.Username)
 	
-		// 7) JWT'yi cookie'de sakla (HTTPOnly=false => XSS veya manipülasyon gösterebilirsiniz)
 		c.Cookie(&fiber.Cookie{
 			Name:     "jwtToken",
 			Value:    signedToken,
 			Expires:  time.Now().Add(time.Hour),
 			HTTPOnly: false, 
 			Secure:   false,
-			SameSite: "Lax",
+			SameSite: "Lax", //Lax idi None yaptım
 		})
 	
-		// 8) Role'ye göre redirect
 		randomIDStr := strconv.Itoa(user.RandomID)
 		if user.Role == "seller" {
 			return c.Redirect("/my-products?id=" + randomIDStr)
@@ -1558,6 +1549,31 @@ func getMyOrders(c *fiber.Ctx) error {
 	})
 }
 
+func robotsTxtHandler(c *fiber.Ctx) error {
+    robotsTxt := `User-agent: *
+Allow: /
+Allow: /products
+Disallow: /addresses
+Disallow: /add-products
+Disallow: /add-to-cart
+Disallow: /cards
+Disallow: /carts
+Disallow: /getFile
+Disallow: /login
+Disallow: /logout
+Disallow: /my-orders
+Disallow: /my-products
+Disallow: /orders
+Disallow: /register
+Disallow: /remove-from-cart
+Disallow: /remove-product
+`
+
+    c.Set("Content-Type", "text/plain; charset=utf-8")
+    return c.SendString(robotsTxt)
+}
+
+
 func main() {
 	mongoURI := "mongodb+srv://me123:12345*@cluster0.76ktg.mongodb.net/myWebsiteAPI?retryWrites=true&w=majority"
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1583,14 +1599,14 @@ func main() {
 	})
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://192.168.1.101:5000",
+		AllowOrigins:     "http://10.10.11.18:5000",
 		AllowCredentials: true,
 	}))
 
 	wd, _ := os.Getwd()
     log.Println("ÇALIŞMA DİZİNİ =>", wd)
 
-	app.Get("/robots.txt", debugAllUsersHandler)
+	app.Get("/robots.txt", robotsTxtHandler)
 	app.Static("/", "templates")
 	// app.Static("/uploads", "./uploads")
 
@@ -1643,7 +1659,7 @@ func main() {
 	app.Post("/cards", addCard)
 
 	app.All("/*", getFile)
-	log.Println("Server is running on http://192.168.1.101:5000")
+	log.Println("Server is running on http://10.10.11.18:5000")
 	if err := app.Listen(":5000"); err != nil {
 		log.Fatal(err)
 	}
