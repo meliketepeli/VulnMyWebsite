@@ -540,7 +540,7 @@ func loginHandler(c *fiber.Ctx) error {
 			Expires:  time.Now().Add(time.Hour),
 			HTTPOnly: false, 
 			Secure:   false,
-			SameSite: "Lax", //Lax idi None yaptım
+			SameSite: "Lax",   // Lax idi "None" yaptım
 		})
 	
 		randomIDStr := strconv.Itoa(user.RandomID)
@@ -1614,9 +1614,7 @@ func main() {
 		MaxAge: 0, 
 	})
 	
-	
 	app.Get("/", loginPageHandler)
-
 
 	app.Get("/login", loginPageHandler)
 
