@@ -25,7 +25,6 @@ import (
 	"os/exec"
 	"net/http"
 	"strings"
-
 )
 
 var mongoClient *mongo.Client
@@ -40,6 +39,8 @@ type User struct {
 	Password string             `json:"password" bson:"Password"`
 	Role     string             `json:"role" bson:"Role"`
 	RandomID int                `json:"randomId" bson:"RandomID"`
+	Email    string             `json:"email" bson:"Email"` // YENİ ALAN
+
 }
 
 type Product struct {
@@ -394,6 +395,8 @@ func registerHandler(c *fiber.Ctx) error {
 		Username string `json:"username" bson:"Username"`
 		Role     string `json:"role" bson:"Role"`
 		Password string `json:"password" bson:"Password"`
+		Email    string `json:"email" bson:"Email"`
+
 	}
 	if err := c.BodyParser(&body); err != nil {
 		log.Println("    Body parse error:", err)
@@ -407,11 +410,20 @@ func registerHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Username already exists"})
 	}
 
+// 2) email var mı? (opsiyonel kontrol)
+var existingByEmail User
+if err := usersColl.FindOne(context.TODO(), bson.M{"Email": body.Email}).Decode(&existingByEmail); err == nil {
+	return c.Status(fiber.StatusConflict).
+		JSON(fiber.Map{"error": "Email already registered"})
+}
+
 	newUser := User{
 		ID:       primitive.NewObjectID(),
 		Username: body.Username,
 		Password: body.Password,
 		Role:     body.Role,
+		Email:    body.Email,
+
 	}
 
 	if _, err := usersColl.InsertOne(context.TODO(), newUser); err != nil {
@@ -419,7 +431,7 @@ func registerHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to register user"})
 	}
 
-	log.Printf("    => User registered successfully: %s", newUser.Username)
+	log.Printf("    => User registered successfully: %s", newUser.Username, newUser.Email)
 	return c.Redirect("/login")
 }
 /*
@@ -481,6 +493,9 @@ func loginHandler(c *fiber.Ctx) error {
 				JSON(fiber.Map{"error": "Invalid request format"})
 		}
 	
+// 2) Değişkenlere al (username, email, password)
+//email, _ := reqBody["email"].(string)
+
 		c.Cookie(&fiber.Cookie{
 			Name:    "userID",
 			Value:   "",
@@ -495,20 +510,32 @@ func loginHandler(c *fiber.Ctx) error {
 		
 		filter := bson.M{
 			"Username": reqBody["username"],
-			//"Password": reqBody["password"],
+			"Password": reqBody["password"],
+		 	// "Email": reqBody["email"],
 		}
 		log.Printf("MongoDB Query Attempt: %+v", filter)
 	
 		usersColl := getUserCollection()
 		var user User
 		err := usersColl.FindOne(context.TODO(), filter).Decode(&user)
+	
 		if err != nil {
 			log.Printf("Login failed: %v", err)
 			return c.Status(fiber.StatusUnauthorized).
-				JSON(fiber.Map{"error": "Invalid username or password"})
+				JSON(fiber.Map{"error": "Invalid Username or Password"})
 		}
+
+/*
+		// Password kıyas
+		if user.Password != password {
+			log.Println("Login failed => email mismatch for user:", user.Username)
+			return c.Status(fiber.StatusUnauthorized).
+				JSON(fiber.Map{"error": "Invalid Password"})
+		}
+		*/
+
 	
-		log.Printf("Login successful: username=%s (role=%s)", user.Username, user.Role)
+		 log.Printf("Login successful: username=%s (role=%s)", user.Username, user.Role)
 	
 		c.Cookie(&fiber.Cookie{
 			Name:    "userID",
@@ -572,6 +599,9 @@ func logoutHandler(c *fiber.Ctx) error {
 	log.Println("    Cookies cleared => redirect /")
 	return c.Redirect("/")
 }
+
+
+
 
 func addProduct(c *fiber.Ctx) error {
 	log.Println(">>> [addProduct] => POST /add-products")

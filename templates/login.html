@@ -71,13 +71,18 @@
     <h1>Login</h1>
     <form id="loginForm" class="login-form">
       <div>
-        <label for="username">Username:</label>
+        <label for="username">Username :</label>
         <input type="text" id="username" required>
       </div>
       <div>
-        <label for="password">Password:</label>
+        <label for="email">Email Addr:</label>
+        <input type="text" id="email" required>
+      </div>
+      <div>
+        <label for="password">Password :</label>
         <input type="password" id="password" required>
       </div>
+      
       <button type="submit">Login</button>
     </form>
     <p>Don't you have an account?</p>
@@ -89,10 +94,11 @@
       event.preventDefault();
 
       const username = document.getElementById('username').value;
+      const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
 
       // Payload
-      const loginData = { username, password };
+      const loginData = { username, password, email };
 
       fetch('http://10.10.11.18:5000/login', {
         method: 'POST',
