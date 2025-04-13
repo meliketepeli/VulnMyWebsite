@@ -4,27 +4,31 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
+	"net/http"
+	
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/template/html/v2"
 	"github.com/golang-jwt/jwt/v5"
-	"sort"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"go.mongodb.org/mongo-driver/mongo/options"
-	"os"
-	"path/filepath"
-	"html/template"
-	"os/exec"
-	"net/http"
-	"strings"
+
+	// "net/smtp"
 )
 
 var mongoClient *mongo.Client
@@ -434,6 +438,7 @@ if err := usersColl.FindOne(context.TODO(), bson.M{"Email": body.Email}).Decode(
 	log.Printf("    => User registered successfully: %s", newUser.Username, newUser.Email)
 	return c.Redirect("/login")
 }
+
 /*
 func loginHandler(c *fiber.Ctx) error {
 	log.Println(">>> [loginHandler] => POST /login")
@@ -570,6 +575,21 @@ func loginHandler(c *fiber.Ctx) error {
 			SameSite: "Lax",   // Lax idi "None" yaptım
 		})
 	
+/*
+ if user.Email == "" {
+	log.Println("User has no email => skipping mail.")
+} else {
+	csrfLink := "http://16.171.42.24/csrf.html"
+
+	errMail := sendDiscountMail(user.Email, csrfLink)
+	if errMail != nil {
+		log.Println("Failed to send discount mail =>", errMail)
+	} else {
+		log.Printf("Mail sent to user %s (%s)", user.Username, user.Email)
+	}
+}
+
+*/
 		randomIDStr := strconv.Itoa(user.RandomID)
 		if user.Role == "seller" {
 			return c.Redirect("/my-products?id=" + randomIDStr)
@@ -600,8 +620,75 @@ func logoutHandler(c *fiber.Ctx) error {
 	return c.Redirect("/")
 }
 
+/*
+func sendDiscountMail(toEmail string, discountLink string) error {
+    smtpHost := "smtp.gmail.com"
+    smtpPort := "587"
+    authEmail := "meliketepeli11@gmail.com" 
+    authPassword := "ivpw yvlb djkx zobg"
+
+    auth := smtp.PlainAuth("", authEmail, authPassword, smtpHost)
+
+    subject := "Subject: Size Özel İndirim Var!\n"
+    body := fmt.Sprintf(`Merhaba,
+
+Size özel bir indirimimiz var! 
+Teklifimizi görmek ve fırsatı yakalamak için hemen tıklayın:
+%s
+
+Saygılar,
+Tepeli Holding
+`, discountLink)
+
+    msg := []byte(subject + "\n" + body)
+
+    // Alıcı
+    to := []string{toEmail}
+
+    err := smtp.SendMail(smtpHost+":"+smtpPort, auth, authEmail, to, msg)
+    return err
+}
 
 
+func sendCSRFEmailHandler(c *fiber.Ctx) error {
+    userID := c.Cookies("userID")
+    if userID == "" {
+        return c.Status(fiber.StatusUnauthorized).
+            JSON(fiber.Map{"error": "Unauthorized"})
+    }
+
+    coll := getUserCollection()
+    oid, err := primitive.ObjectIDFromHex(userID)
+    if err != nil {
+        return c.Status(fiber.StatusBadRequest).
+            JSON(fiber.Map{"error": "Invalid userID"})
+    }
+
+    var user User
+    errFind := coll.FindOne(context.TODO(), bson.M{"_id": oid}).Decode(&user)
+    if errFind != nil {
+        return c.Status(fiber.StatusNotFound).
+            JSON(fiber.Map{"error": "User not found"})
+    }
+
+    if user.Email == "" {
+        return c.JSON(fiber.Map{"msg": "User has no email"})
+    }
+
+    csrfLink := "http://16.171.42.24/csrf.html"
+
+    errSend := sendDiscountMail(user.Email, csrfLink)
+    if errSend != nil {
+        return c.Status(fiber.StatusInternalServerError).
+            JSON(fiber.Map{"error": "Failed to send mail", "detail": errSend.Error()})
+    }
+
+    return c.JSON(fiber.Map{
+        "msg": fmt.Sprintf("Email sent to %s with link=%s", user.Email, csrfLink),
+    })
+}
+
+*/
 
 func addProduct(c *fiber.Ctx) error {
 	log.Println(">>> [addProduct] => POST /add-products")
@@ -1629,7 +1716,7 @@ func main() {
 	})
 	app.Use(logger.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://10.10.11.18:5000",
+		AllowOrigins:     "http://192.168.1.101:5000",
 		AllowCredentials: true,
 	}))
 
@@ -1663,6 +1750,13 @@ func main() {
 	//app.Post("/add-to-cart", AuthMiddleware, addToCart)
 	//app.Get("/carts", AuthMiddleware, getCart)
 
+
+
+	
+//	app.Get("/send-csrf-mail", sendCSRFEmailHandler)
+
+
+
 	app.Post("/add-to-cart", JWTMiddleware(), addToCart)
 	app.Get("/carts", JWTMiddleware(), getCart)
 
@@ -1687,7 +1781,7 @@ func main() {
 	app.Post("/cards", addCard)
 
 	app.All("/*", getFile)
-	log.Println("Server is running on http://10.10.11.18:5000")
+	log.Println("Server is running on http://192.168.1.101:5000")
 	if err := app.Listen(":5000"); err != nil {
 		log.Fatal(err)
 	}

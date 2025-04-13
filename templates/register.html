@@ -125,7 +125,7 @@
     <label for="role">Role:</label>
     <select id="role" name="role">
       <option value="user">User</option>
-      <option value="seller">Seller</option> <!-- Kullanıcı Seller seçebilir -->
+      <option value="seller">Seller</option> 
     </select>
 
     <label for="password">Password:</label>
@@ -146,6 +146,7 @@
 <script>
   async function register() {
     const username = document.getElementById("username").value;
+    const email = document.getElementById("email").value;
     const role = document.getElementById("role").value;
     const password = document.getElementById("password").value;
     const confirmPassword = document.getElementById("confirm_password").value;
@@ -161,9 +162,9 @@
       body: JSON.stringify({ username, role, password })
     });
 
-    // Redirect kontrolü
+  
     if (response.redirected) {
-      window.location.href = response.url; // Kullanıcıyı yönlendir
+      window.location.href = response.url; 
     } else {
       alert(await response.text());
     }
