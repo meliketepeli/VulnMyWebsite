@@ -42,12 +42,12 @@
     .product-container {
       display: flex;
       flex-wrap: wrap;
-      gap: 20px;
+      gap: 20px; /* Kartlar arasında eşit boşluk */
       margin-top: 20px;
     }
     .product-card {
       background-color: #fff;
-      flex: 0 0 calc(25% - 20px);
+      flex: 0 0 calc(25% - 20px); 
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       border-radius: 6px;
       overflow: hidden;
@@ -56,6 +56,15 @@
       align-items: center;
       text-align: center;
       padding: 15px;
+      margin-left:5%;
+    }
+    /* Görselleri sabit boyutta tutmak için */
+    .product-card img {
+      max-width: 100%;
+      height: 200px;         /* E-ticaret sitelerinde sıkça kullanılan yaklaşık yükseklik */
+      object-fit: cover;     /* Taşma olmadan kırparak yerleştirir */
+      border-radius: 4px;
+      margin-bottom: 10px;
     }
     .product-card a img:hover {
       opacity: 0.8;
@@ -131,16 +140,15 @@
         {{ else }}
           <img src="{{ .ImageURL }}" alt="Product Image">
         {{ end }}
-
         -->
 
         {{ if eq $.UserRole "user" }}
-  <a href="{{ .ImageURL }}?ts={{.ID.Hex}}&random={{ Now }}" target="_blank">
-    <img src="{{ .ImageURL }}?ts={{.ID.Hex}}&random={{ Now}}" alt="Product Image">
-  </a>
-{{ else }}
-  <img src="{{ .ImageURL }}" alt="Product Image">
-{{ end }}
+          <a href="{{ .ImageURL }}?ts={{.ID.Hex}}&random={{ Now }}" target="_blank">
+            <img src="{{ .ImageURL }}?ts={{.ID.Hex}}&random={{ Now}}" alt="Product Image">
+          </a>
+        {{ else }}
+          <img src="{{ .ImageURL }}" alt="Product Image">
+        {{ end }}
 
         <h3>{{ .Name }}</h3>
         <p>{{ .Description }}</p>
