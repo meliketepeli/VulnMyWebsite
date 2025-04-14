@@ -16,19 +16,16 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/template/html/v2"
-	"github.com/golang-jwt/jwt/v5"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	// "net/smtp"
 )
 
 var mongoClient *mongo.Client
@@ -43,7 +40,7 @@ type User struct {
 	Password string             `json:"password" bson:"Password"`
 	Role     string             `json:"role" bson:"Role"`
 	RandomID int                `json:"randomId" bson:"RandomID"`
-	Email    string             `json:"email" bson:"Email"` // YENİ ALAN
+	Email    string             `json:"email" bson:"Email"` 
 
 }
 
@@ -301,7 +298,6 @@ func addCard(c *fiber.Ctx) error {
 	return c.Redirect("/cards")
 }
 
-var jwtSecret = []byte("supersecretkey")
 
 func AuthMiddleware(c *fiber.Ctx) error {
 	log.Println(">>> [AuthMiddleware] Checking userID cookie")
@@ -312,85 +308,6 @@ func AuthMiddleware(c *fiber.Ctx) error {
 	}
 	log.Println("    userID cookie =", userID)
 	return c.Next()
-}
-/*
-func JWTMiddleware() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		tokenString := c.Get("Authorization")
-		if tokenString == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Missing token"})
-		}
-		tokenString = tokenString[7:]
-
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method")
-			}
-			return jwtSecret, nil
-		})
-
-		if err != nil || !token.Valid {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token"})
-		}
-
-		claims, ok := token.Claims.(jwt.MapClaims)
-		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid token claims"})
-		}
-
-		username, ok := claims["username"].(string)
-		if !ok {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username in token"})
-		}
-
-		c.Locals("username", username)
-		return c.Next()
-	}
-}
-*/
-
-func JWTMiddleware() fiber.Handler {
-    return func(c *fiber.Ctx) error {
-        authHeader := c.Get("Authorization")
-        tokenStr := ""
-
-        // 1) Authorization: Bearer var mı?
-        if strings.HasPrefix(authHeader, "Bearer ") {
-            tokenStr = authHeader[7:]
-        } else {
-            // 2) Cookie'deki jwtToken değerine bak
-            tokenStr = c.Cookies("jwtToken") 
-        }
-
-        // 3) Hâlâ boşsa => token yok => 401
-        if tokenStr == "" {
-            return c.Status(fiber.StatusUnauthorized).
-                JSON(fiber.Map{"error": "Missing or invalid token"})
-        }
-
-        // 4) Parse & validate
-        token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-            if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-                return nil, fmt.Errorf("unexpected signing method")
-            }
-            return jwtSecret, nil
-        })
-        if err != nil || !token.Valid {
-            return c.Status(fiber.StatusUnauthorized).
-                JSON(fiber.Map{"error": "Invalid token"})
-        }
-
-        // 5) Claims => c.Locals
-        claims, ok := token.Claims.(jwt.MapClaims)
-        if !ok {
-            return c.Status(fiber.StatusUnauthorized).
-                JSON(fiber.Map{"error": "Invalid JWT payload"})
-        }
-        c.Locals("username", claims["username"])
-        c.Locals("role", claims["role"])
-
-        return c.Next()
-    }
 }
 
 func registerHandler(c *fiber.Ctx) error {
@@ -414,7 +331,7 @@ func registerHandler(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Username already exists"})
 	}
 
-// 2) email var mı? (opsiyonel kontrol)
+
 var existingByEmail User
 if err := usersColl.FindOne(context.TODO(), bson.M{"Email": body.Email}).Decode(&existingByEmail); err == nil {
 	return c.Status(fiber.StatusConflict).
@@ -439,55 +356,6 @@ if err := usersColl.FindOne(context.TODO(), bson.M{"Email": body.Email}).Decode(
 	return c.Redirect("/login")
 }
 
-/*
-func loginHandler(c *fiber.Ctx) error {
-	log.Println(">>> [loginHandler] => POST /login")
-	var reqBody = make(map[string]interface{})
-	if err := c.BodyParser(&reqBody); err != nil {
-		log.Println("    Could not parse body:", err)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request format"})
-	}
-	log.Printf("    RAW INPUT => username=%v password=%v", reqBody["username"], reqBody["password"])
-	c.Cookie(&fiber.Cookie{
-		Name:    "userID",
-		Value:   "",
-		Expires: time.Now().Add(-1 * time.Hour),
-	})
-	c.Cookie(&fiber.Cookie{
-		Name:    "Username",
-		Value:   "",
-		Expires: time.Now().Add(-1 * time.Hour),
-	})
-	query := bson.M{
-		"Username": reqBody["username"],
-		"Password": reqBody["password"],
-	}
-	log.Printf("MongoDB Query Attempt: %+v", query)
-	usersColl := getUserCollection()
-	var user User
-	err := usersColl.FindOne(context.TODO(), query).Decode(&user)
-	if err != nil {
-		log.Printf("Login failed: %v", err)
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid username or password"})
-	}
-	log.Printf("Login successful: username=%s (role=%s)", user.Username, user.Role)
-	c.Cookie(&fiber.Cookie{
-		Name:    "userID",
-		Value:   user.ID.Hex(),
-		Expires: time.Now().Add(24 * time.Hour),
-	})
-	c.Cookie(&fiber.Cookie{
-		Name:    "Username",
-		Value:   user.Username,
-		Expires: time.Now().Add(24 * time.Hour),
-	})
-	if user.Role == "seller" {
-		return c.Redirect("/my-products?id=" + strconv.Itoa(user.RandomID))
-	}
-	return c.Redirect("/products?id=" + strconv.Itoa(user.RandomID))
-}
-	*/
-
 	func loginHandler(c *fiber.Ctx) error {
 		log.Println(">>> [loginHandler] => POST /login")
 	
@@ -498,8 +366,6 @@ func loginHandler(c *fiber.Ctx) error {
 				JSON(fiber.Map{"error": "Invalid request format"})
 		}
 	
-// 2) Değişkenlere al (username, email, password)
-//email, _ := reqBody["email"].(string)
 
 		c.Cookie(&fiber.Cookie{
 			Name:    "userID",
@@ -529,16 +395,6 @@ func loginHandler(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusUnauthorized).
 				JSON(fiber.Map{"error": "Invalid Username or Password"})
 		}
-
-/*
-		// Password kıyas
-		if user.Password != password {
-			log.Println("Login failed => email mismatch for user:", user.Username)
-			return c.Status(fiber.StatusUnauthorized).
-				JSON(fiber.Map{"error": "Invalid Password"})
-		}
-		*/
-
 	
 		 log.Printf("Login successful: username=%s (role=%s)", user.Username, user.Role)
 	
@@ -553,43 +409,6 @@ func loginHandler(c *fiber.Ctx) error {
 			Expires: time.Now().Add(24 * time.Hour),
 		})
 	
-		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-			"username": user.Username,
-			"role":     user.Role,
-			"exp":      time.Now().Add(time.Hour).Unix(),
-		})
-		signedToken, errToken := token.SignedString(jwtSecret)
-		if errToken != nil {
-			log.Println("    Failed to sign token:", errToken)
-			return c.Status(fiber.StatusInternalServerError).
-				JSON(fiber.Map{"error": "Token creation failed"})
-		}
-		log.Println("    => JWT token created for user:", user.Username)
-	
-		c.Cookie(&fiber.Cookie{
-			Name:     "jwtToken",
-			Value:    signedToken,
-			Expires:  time.Now().Add(time.Hour),
-			HTTPOnly: false, 
-			Secure:   false,
-			SameSite: "Lax",   // Lax idi "None" yaptım
-		})
-	
-/*
- if user.Email == "" {
-	log.Println("User has no email => skipping mail.")
-} else {
-	csrfLink := "http://16.171.42.24/csrf.html"
-
-	errMail := sendDiscountMail(user.Email, csrfLink)
-	if errMail != nil {
-		log.Println("Failed to send discount mail =>", errMail)
-	} else {
-		log.Printf("Mail sent to user %s (%s)", user.Username, user.Email)
-	}
-}
-
-*/
 		randomIDStr := strconv.Itoa(user.RandomID)
 		if user.Role == "seller" {
 			return c.Redirect("/my-products?id=" + randomIDStr)
@@ -620,75 +439,6 @@ func logoutHandler(c *fiber.Ctx) error {
 	return c.Redirect("/")
 }
 
-/*
-func sendDiscountMail(toEmail string, discountLink string) error {
-    smtpHost := "smtp.gmail.com"
-    smtpPort := "587"
-    authEmail := "meliketepeli11@gmail.com" 
-    authPassword := "ivpw yvlb djkx zobg"
-
-    auth := smtp.PlainAuth("", authEmail, authPassword, smtpHost)
-
-    subject := "Subject: Size Özel İndirim Var!\n"
-    body := fmt.Sprintf(`Merhaba,
-
-Size özel bir indirimimiz var! 
-Teklifimizi görmek ve fırsatı yakalamak için hemen tıklayın:
-%s
-
-Saygılar,
-Tepeli Holding
-`, discountLink)
-
-    msg := []byte(subject + "\n" + body)
-
-    // Alıcı
-    to := []string{toEmail}
-
-    err := smtp.SendMail(smtpHost+":"+smtpPort, auth, authEmail, to, msg)
-    return err
-}
-
-
-func sendCSRFEmailHandler(c *fiber.Ctx) error {
-    userID := c.Cookies("userID")
-    if userID == "" {
-        return c.Status(fiber.StatusUnauthorized).
-            JSON(fiber.Map{"error": "Unauthorized"})
-    }
-
-    coll := getUserCollection()
-    oid, err := primitive.ObjectIDFromHex(userID)
-    if err != nil {
-        return c.Status(fiber.StatusBadRequest).
-            JSON(fiber.Map{"error": "Invalid userID"})
-    }
-
-    var user User
-    errFind := coll.FindOne(context.TODO(), bson.M{"_id": oid}).Decode(&user)
-    if errFind != nil {
-        return c.Status(fiber.StatusNotFound).
-            JSON(fiber.Map{"error": "User not found"})
-    }
-
-    if user.Email == "" {
-        return c.JSON(fiber.Map{"msg": "User has no email"})
-    }
-
-    csrfLink := "http://16.171.42.24/csrf.html"
-
-    errSend := sendDiscountMail(user.Email, csrfLink)
-    if errSend != nil {
-        return c.Status(fiber.StatusInternalServerError).
-            JSON(fiber.Map{"error": "Failed to send mail", "detail": errSend.Error()})
-    }
-
-    return c.JSON(fiber.Map{
-        "msg": fmt.Sprintf("Email sent to %s with link=%s", user.Email, csrfLink),
-    })
-}
-
-*/
 
 func addProduct(c *fiber.Ctx) error {
 	log.Println(">>> [addProduct] => POST /add-products")
@@ -930,6 +680,16 @@ func getProducts(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to decode products"})
 	}
 	log.Printf("Found %d products total", len(products))
+
+
+	for i, p := range products {
+        if p.ImageURL != "" {
+            products[i].ImageURL = fmt.Sprintf("%s?id=%d", p.ImageURL, randomID)
+        }
+    }
+
+
+
 	return c.Render("products", fiber.Map{
 		"Products": products,
 		"UserID":   userID,
@@ -1082,97 +842,6 @@ func getCartsFromDB(userID string) ([]Cart, error) {
 	return carts, nil
 }
 
-/*
-func addToCart(c *fiber.Ctx) error {
-	log.Println(">>> [addToCart] => POST /add-to-cart")
-	userID := c.Cookies("userID")
-	if userID == "" {
-		log.Println("    Unauthorized => no userID cookie")
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
-	}
-	productID := c.FormValue("product_id")
-	name := c.FormValue("name")
-	priceStr := c.FormValue("price")
-	qtyStr := c.FormValue("quantity")
-	oid, err := primitive.ObjectIDFromHex(productID)
-	if err != nil {
-		log.Println("    invalid product ID =>", err)
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid product ID"})
-	}
-	priceVal, err := strconv.ParseFloat(priceStr, 64)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid price"})
-	}
-	qtyVal, err := strconv.Atoi(qtyStr)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid quantity"})
-	}
-	uid, err := primitive.ObjectIDFromHex(userID)
-	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid user ID"})
-	}
-	cartsColl := getCollection("carts")
-	filter := bson.M{"product_id": oid, "user_id": uid}
-	var existing Cart
-	errFind := cartsColl.FindOne(context.TODO(), filter).Decode(&existing)
-	if errFind == nil {
-		update := bson.M{"$inc": bson.M{"quantity": qtyVal}}
-		if _, errUpd := cartsColl.UpdateOne(context.TODO(), filter, update); errUpd != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to update cart"})
-		}
-		log.Printf("    => Updated existing cart item, +%d quantity\n", qtyVal)
-	} else {
-		newCart := Cart{
-			Id:        primitive.NewObjectID(),
-			Username:  c.Cookies("Username"),
-			UserID:    uid,
-			Quantity:  qtyVal,
-			Name:      name,
-			Price:     priceVal,
-			ProductID: oid,
-		}
-		_, errIns := cartsColl.InsertOne(context.TODO(), newCart)
-		if errIns != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to insert cart item"})
-		}
-		log.Println("    => Inserted new cart item")
-	}
-	ordersColl := getCollection("orders")
-	newOrder := Order{
-		Id:        primitive.NewObjectID(),
-		Username:  c.Cookies("Username"),
-		Name:      name,
-		Price:     priceVal,
-		Quantity:  qtyVal,
-		ProductID: oid,
-		UserID:    uid,
-	}
-	_, errOrd := ordersColl.InsertOne(context.TODO(), newOrder)
-	if errOrd != nil {
-		log.Println("    InsertOne(orders) =>", errOrd)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add order"})
-	}
-	log.Println("    => Inserted new doc in 'orders'")
-	sellerOrdersColl := getCollection("seller-orders")
-	newSellerOrder := SellerOrder{
-		Id:        primitive.NewObjectID(),
-		Username:  c.Cookies("Username"),
-		Name:      name,
-		Price:     priceVal,
-		Quantity:  qtyVal,
-		ProductID: oid,
-		UserID:    uid,
-	}
-	_, errSo := sellerOrdersColl.InsertOne(context.TODO(), newSellerOrder)
-	if errSo != nil {
-		log.Println("    InsertOne(seller-orders) =>", errSo)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to add seller order"})
-	}
-	log.Println("    => Inserted new doc in 'seller-orders'")
-	return c.Redirect("/carts")
-}
-
-*/
 func addToCart(c *fiber.Ctx) error {
 	log.Println(">>> [addToCart] => POST /add-to-cart")
 
@@ -1720,12 +1389,12 @@ func main() {
 		AllowCredentials: true,
 	}))
 
+
 	wd, _ := os.Getwd()
     log.Println("ÇALIŞMA DİZİNİ =>", wd)
 
 	app.Get("/robots.txt", robotsTxtHandler)
 	app.Static("/", "templates")
-	// app.Static("/uploads", "./uploads")
 
 	app.Static("/uploads", "./uploads", fiber.Static{
 		MaxAge: 0, 
@@ -1742,23 +1411,10 @@ func main() {
 	})
 	app.Post("/register", registerHandler)
 	app.Post("/logout", logoutHandler)
-	//app.Use(AuthMiddleware)
- 
-	app.Use(JWTMiddleware())
 
 	//bunları kaldırdım
-	//app.Post("/add-to-cart", AuthMiddleware, addToCart)
-	//app.Get("/carts", AuthMiddleware, getCart)
-
-
-
-	
-//	app.Get("/send-csrf-mail", sendCSRFEmailHandler)
-
-
-
-	app.Post("/add-to-cart", JWTMiddleware(), addToCart)
-	app.Get("/carts", JWTMiddleware(), getCart)
+	app.Post("/add-to-cart", AuthMiddleware, addToCart)
+	app.Get("/carts", AuthMiddleware, getCart)
 
 
 	app.Post("/remove-from-cart", removeFromCart)

