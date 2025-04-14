@@ -45,6 +45,7 @@
       border-radius: 4px;
       font-size: 1rem;
       transition: border-color 0.3s ease;
+      width: 100%;
     }
     .login-form input:focus {
       border-color: #007bff;
@@ -60,10 +61,38 @@
       border-radius: 4px;
       cursor: pointer;
       transition: background-color 0.3s ease;
+      margin-top: 0.5rem;
     }
     .login-form button:hover {
       background-color: #0056b3;
     }
+    
+    /* Register Button Styles */
+    .register-btn {
+      background-color: #28a745;
+      color: #fff;
+      padding: 0.75rem;
+      font-size: 1rem;
+      font-weight: bold;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 1rem;
+      transition: background-color 0.3s ease;
+    }
+    .register-btn:hover {
+      background-color: #218838;
+    }
+
+    /* If you want to align the buttons horizontally (optional), you could do:
+       .button-group {
+         display: flex;
+         gap: 1rem;
+         justify-content: center;
+         margin-top: 1rem;
+       } 
+       Then wrap your buttons in <div class="button-group"> ... </div>
+    */
   </style>
 </head>
 <body>
@@ -71,7 +100,7 @@
     <h1>Login</h1>
     <form id="loginForm" class="login-form">
       <div>
-        <label for="username">Username :</label>
+        <label for="username">Username:</label>
         <input type="text" id="username" required>
       </div>
       <div>
@@ -79,14 +108,15 @@
         <input type="text" id="email" required>
       </div>
       <div>
-        <label for="password">Password :</label>
+        <label for="password">Password:</label>
         <input type="password" id="password" required>
       </div>
       
       <button type="submit">Login</button>
     </form>
-    <p>Don't you have an account?</p>
-    <button onclick="window.location.href='/register'">Register</button>
+
+    <p style="margin-top: 1rem;">Don't have an account?</p>
+    <button class="register-btn" onclick="window.location.href='/register'">Register</button>
   </div>
 
   <script>
@@ -107,20 +137,19 @@
       })
       .then(response => {
         if (response.redirected) {
-          
+          // If server redirects (e.g. successful login), navigate to that URL
           window.location.href = response.url;
           return;
         } else {
-          // 200 OK + JSON
+          // Possibly a 200 OK with JSON error or success
           return response.json();
         }
       })
       .then(data => {
-        if (!data) return; 
+        if (!data) return;
         if (data.error) {
           alert(data.error);
         } else {
-          
           alert("Unhandled JSON: " + JSON.stringify(data));
         }
       })

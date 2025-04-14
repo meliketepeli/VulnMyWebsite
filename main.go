@@ -495,7 +495,28 @@ func addProduct(c *fiber.Ctx) error {
 		imageURL = "/uploads/" + file.Filename
 		log.Printf("    => Local file upload saved => %s", imageURL)
 
-	} else if externalURL != "" {
+	}  else if externalURL != "" {
+		log.Println("    External URL provided =>", externalURL)
+	
+		// DİSKE KAYDETMEYİ SİLİYORUZ, HARİCÎ İNDİRME YOK
+		// Sadece imageURL’yi istediğimiz biçimde set edelim:
+		
+		// Mesela parametreler:
+		rID := user.RandomID
+		tsVal := strconv.FormatInt(time.Now().Unix(), 10)
+		randNano := time.Now().UnixNano()
+	
+		// Şu şekilde birleştiriyoruz:
+		imageURL = fmt.Sprintf("%s?id=%d?ts=%s&random=%d",
+							   externalURL,
+							   rID,
+							   tsVal,
+							   randNano)
+	
+		log.Printf("    => External imageURL set to: %s\n", imageURL)
+	
+
+	/*else if externalURL != "" {
 		log.Println("    External URL provided =>", externalURL)
 
 		resp, err := http.Get(externalURL)
@@ -519,6 +540,7 @@ func addProduct(c *fiber.Ctx) error {
 		}
 
 		imageURL = "/uploads/" + filename
+		*/
 		log.Printf("    => External image saved to %s\n", imageURL)
 
 	} else {
