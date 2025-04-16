@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Seller Orders</title>
   <style>
-    /* GENEL SAYFA STİLİ */
+  
     body {
       font-family: Arial, sans-serif;
       margin: 0;
@@ -14,7 +14,7 @@
       background-color: #f5f5f5; 
     }
 
-    /* NAV BAR */
+  
     nav {
       background-color: #0056b3;
       color: white;
@@ -30,7 +30,7 @@
       text-decoration: underline;
     }
 
-    /* ANA KONTEYNER */
+
     .container {
       max-width: 900px;
       margin: 40px auto;
@@ -68,7 +68,6 @@
       border-bottom: none;
     }
 
-    /* Responsive tasarım - tabloyu yatayda kaydır */
     @media (max-width: 600px) {
       table {
         display: block;
@@ -81,14 +80,14 @@
 
 <body>
 
-<!-- NAV BAR -->
+
 <nav>
   <a id="productsLink" href="/products?id={{.RandomID}}">Products</a>
   <a id="cartLink" href="/carts?id={{.RandomID}}">Cart</a>
   <a href="#" onclick="logout()">Logout</a>
 </nav>
 
-<!-- JS: Cookie işlemleri & logout -->
+
 <script>
   function getCookie(name) {
     const value = `; ${document.cookie}`;
@@ -99,13 +98,13 @@
   const userID = getCookie("userID");
   const role = getCookie("role");
 
-  // Kullanıcının ID'sini linklere ekleyelim (opsiyonel)
+  
   if (userID) {
     document.getElementById("productsLink").href = `/products?id=${userID}`;
     document.getElementById("cartLink").href = `/carts?id=${userID}`;
   }
 
-  // Eğer kullanıcı seller ise Cart linkini gizle
+
   if (role === "seller") {
     document.getElementById("cartLink").style.display = "none";
   }
@@ -119,7 +118,6 @@
   }
 </script>
 
-<!-- ANA KONTEYNER -->
 <div class="container">
   <h2>Seller Orders</h2>
 
@@ -131,7 +129,7 @@
         <th>Price (USD)</th>
         <th>Quantity</th>
         <th>Total Amount</th>
-        <th>Address</th> <!-- Adres bilgileri için yeni sütun -->
+        <th>Address</th> 
       </tr>
     </thead>
     <tbody>
@@ -142,7 +140,6 @@
         <td>${{ printf "%.2f" .Price }}</td>
         <td>{{ .Quantity }}</td>
         <td>${{ printf "%.2f" .Total }}</td>
-        <!-- Örnek: Sunucu tarafında .Street, .City, .Country alanları SellerOrder'a eklenmişse -->
         <td>{{ .Street }}, {{ .City }}, {{ .Country }}</td>
       </tr>
     {{ end }}

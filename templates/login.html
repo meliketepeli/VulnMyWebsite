@@ -137,11 +137,9 @@
       })
       .then(response => {
         if (response.redirected) {
-          // If server redirects (e.g. successful login), navigate to that URL
           window.location.href = response.url;
           return;
         } else {
-          // Possibly a 200 OK with JSON error or success
           return response.json();
         }
       })

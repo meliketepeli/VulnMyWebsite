@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,18 +35,18 @@ func getCollection(collName string) *mongo.Collection {
 
 type User struct {
 	ID       primitive.ObjectID `json:"id" bson:"_id"`
-	Username string             `json:"username" bson:"Username"`
-	Password string             `json:"password" bson:"Password"`
-	Role     string             `json:"role" bson:"Role"`
-	RandomID int                `json:"randomId" bson:"RandomID"`
-	Email    string             `json:"email" bson:"Email"` 
+	Username string             `json:"username" bson:"username"`
+	Password string             `json:"password" bson:"password"`
+	Role     string             `json:"role" bson:"role"`
+	RandomID int                `json:"randomID" bson:"randomID"`
+	Email    string             `json:"email" bson:"email"` 
 
 }
 
 type Product struct {
 	ID          primitive.ObjectID `json:"id" bson:"_id"`
 	Name        string             `json:"name" bson:"name"`
-	Description template.HTML             `json:"description" bson:"description"`
+	Description template.HTML       `json:"description" bson:"description"`
 	Price       float64            `json:"price" bson:"price"`
 	Quantity    int                `json:"quantity" bson:"quantity"`
 	ImageURL    string             `json:"imageURL" bson:"imageURL"`
@@ -67,7 +66,7 @@ type SellerProduct struct {
 
 type Cart struct {
 	Id        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	Username  string             `json:"username" bson:"Username"`
+	Username  string             `json:"username" bson:"username"`
 	Name      string             `json:"name" bson:"name,omitempty"`
 	Price     float64            `json:"price" bson:"price,omitempty"`
 	Quantity  int                `json:"quantity" bson:"quantity,omitempty"`
@@ -77,7 +76,7 @@ type Cart struct {
 
 type Order struct {
 	Id        primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	Username  string             `json:"username" bson:"Username"`
+	Username  string             `json:"username" bson:"username"`
 	Name      string             `json:"name" bson:"name"`
 	Price     float64            `json:"price" bson:"price"`
 	Quantity  int                `json:"quantity" bson:"quantity"`
@@ -87,7 +86,7 @@ type Order struct {
 
 type SellerOrder struct {
 	Id          primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	Username    string             `json:"username" bson:"Username"`
+	Username    string             `json:"username" bson:"username"`
 	Name        string             `json:"name" bson:"name"`
 	Description string             `json:"description" bson:"description"`
 	Price       float64            `json:"price" bson:"price"`
@@ -130,52 +129,45 @@ func getUserCollection() *mongo.Collection {
 
 
 func getAddresses(c *fiber.Ctx) error {
-	qid := c.Query("id")
-	if qid == "" {
-		userID := c.Cookies("userID")
-		if userID == "" {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
-		}
-		oid, err := primitive.ObjectIDFromHex(userID)
-		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid userID"})
-		}
-		var user User
-		if err := getUserCollection().FindOne(context.TODO(), bson.M{"_id": oid}).Decode(&user); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "User not found"})
-		}
-		return c.Redirect(fmt.Sprintf("/addresses?id=%d", user.RandomID))
+	// 1. userID cookie'den alınır
+	userID := c.Cookies("userID")
+	if userID == "" {
+		log.Println("[getAddresses] No userID cookie => Unauthorized")
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	randomID, err := strconv.Atoi(qid)
+	oid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid randomID value"})
+		log.Println("[getAddresses] Invalid userID format")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid userID"})
 	}
 
 	var user User
-	if err := getUserCollection().FindOne(context.TODO(), bson.M{"RandomID": randomID}).Decode(&user); err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
+	if err := getUserCollection().FindOne(context.TODO(), bson.M{"_id": oid}).Decode(&user); err != nil {
+		log.Println("[getAddresses] User not found for userID =", userID)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "User not found"})
 	}
 
 	filter := bson.M{"user_id": user.ID}
 	cursor, err := getAddressCollection().Find(context.TODO(), filter)
 	if err != nil {
-		log.Println("DB error on find addresses =>", err)
+		log.Println("[getAddresses] DB error on find addresses:", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to fetch addresses"})
 	}
 	defer cursor.Close(context.TODO())
 
 	var addresses []Address
 	if err := cursor.All(context.TODO(), &addresses); err != nil {
-		log.Println("Decode error =>", err)
+		log.Println("[getAddresses] Decode error on addresses:", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Decode error on addresses"})
 	}
 
 	return c.Render("addresses", fiber.Map{
 		"Addresses": addresses,
-		"RandomID":  randomID,
+		"RandomID":  user.RandomID,
 	})
 }
+
 
 
 func addAddress(c *fiber.Ctx) error {
@@ -238,7 +230,7 @@ func getCards(c *fiber.Ctx) error {
 	}
 
 	var user User
-	if err := getUserCollection().FindOne(context.TODO(), bson.M{"RandomID": randomID}).Decode(&user); err != nil {
+	if err := getUserCollection().FindOne(context.TODO(), bson.M{"randomID": randomID}).Decode(&user); err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 
@@ -313,10 +305,10 @@ func AuthMiddleware(c *fiber.Ctx) error {
 func registerHandler(c *fiber.Ctx) error {
 	log.Println(">>> [registerHandler] => POST /register")
 	var body struct {
-		Username string `json:"username" bson:"Username"`
-		Role     string `json:"role" bson:"Role"`
-		Password string `json:"password" bson:"Password"`
-		Email    string `json:"email" bson:"Email"`
+		Username string `json:"username" bson:"username"`
+		Role     string `json:"role" bson:"role"`
+		Password string `json:"password" bson:"password"`
+		Email    string `json:"email" bson:"email"`
 
 	}
 	if err := c.BodyParser(&body); err != nil {
@@ -326,14 +318,14 @@ func registerHandler(c *fiber.Ctx) error {
 
 	usersColl := getCollection("users")
 	var existing User
-	if err := usersColl.FindOne(context.TODO(), bson.M{"Username": body.Username}).Decode(&existing); err == nil {
+	if err := usersColl.FindOne(context.TODO(), bson.M{"username": body.Username}).Decode(&existing); err == nil {
 		log.Println("    Username already exists")
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Username already exists"})
 	}
 
 
 var existingByEmail User
-if err := usersColl.FindOne(context.TODO(), bson.M{"Email": body.Email}).Decode(&existingByEmail); err == nil {
+if err := usersColl.FindOne(context.TODO(), bson.M{"email": body.Email}).Decode(&existingByEmail); err == nil {
 	return c.Status(fiber.StatusConflict).
 		JSON(fiber.Map{"error": "Email already registered"})
 }
@@ -356,47 +348,46 @@ if err := usersColl.FindOne(context.TODO(), bson.M{"Email": body.Email}).Decode(
 	return c.Redirect("/login")
 }
 
-	func loginHandler(c *fiber.Ctx) error {
-		log.Println(">>> [loginHandler] => POST /login")
-	
-		var reqBody = make(map[string]interface{})
-		if err := c.BodyParser(&reqBody); err != nil {
-			log.Println("    Could not parse body:", err)
-			return c.Status(fiber.StatusBadRequest).
-				JSON(fiber.Map{"error": "Invalid request format"})
-		}
-	
 
-		c.Cookie(&fiber.Cookie{
-			Name:    "userID",
-			Value:   "",
-			Expires: time.Now().Add(-1 * time.Hour),
-		})
-		c.Cookie(&fiber.Cookie{
-			Name:    "Username",
-			Value:   "",
-			Expires: time.Now().Add(-1 * time.Hour),
-		})
-	
-		
-		filter := bson.M{
-			"Username": reqBody["username"],
-			"Password": reqBody["password"],
-		 	// "Email": reqBody["email"],
-		}
-		log.Printf("MongoDB Query Attempt: %+v", filter)
-	
-		usersColl := getUserCollection()
-		var user User
-		err := usersColl.FindOne(context.TODO(), filter).Decode(&user)
-	
-		if err != nil {
-			log.Printf("Login failed: %v", err)
-			return c.Status(fiber.StatusUnauthorized).
-				JSON(fiber.Map{"error": "Invalid Username or Password"})
-		}
-	
-		 log.Printf("Login successful: username=%s (role=%s)", user.Username, user.Role)
+func loginHandler(c *fiber.Ctx) error {
+    log.Println(">>> [loginHandler] => POST /login")
+
+    c.Cookie(&fiber.Cookie{
+		Name:    "userID",
+		Value:   "",
+		Expires: time.Now().Add(-1 * time.Hour),
+	})
+	c.Cookie(&fiber.Cookie{
+		Name:    "Username",
+		Value:   "",
+		Expires: time.Now().Add(-1 * time.Hour),
+	})
+
+    
+    var filter bson.M
+    if err := c.BodyParser(&filter); err != nil {
+        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+            "error": "MongoDB error: invalid query syntax",
+        })
+    }
+
+    var user User
+    err := getUserCollection().FindOne(context.TODO(), filter).Decode(&user)
+    if err != nil {
+        errorMsg := err.Error()
+        
+        if strings.Contains(errorMsg, "cannot unmarshal") {
+            errorMsg = "MongoDB error: bson: syntax error in payload"
+        } else {
+            errorMsg = strings.Replace(errorMsg, "mongo: ", "MongoDB error: ", 1)
+        }
+
+        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+            "error": errorMsg,
+        })
+    }
+
+    log.Printf("Login successful: username=%s (role=%s)", user.Username, user.Role)
 	
 		c.Cookie(&fiber.Cookie{
 			Name:    "userID",
@@ -414,8 +405,9 @@ if err := usersColl.FindOne(context.TODO(), bson.M{"Email": body.Email}).Decode(
 			return c.Redirect("/my-products?id=" + randomIDStr)
 		}
 		return c.Redirect("/products?id=" + randomIDStr)
-	}
-	
+}
+
+
 
 func loginPageHandler(c *fiber.Ctx) error {
 	return c.SendFile("templates/login.html")
@@ -430,7 +422,7 @@ func logoutHandler(c *fiber.Ctx) error {
 		HTTPOnly: true,
 	})
 	c.Cookie(&fiber.Cookie{
-		Name:     "Username",
+		Name:     "username",
 		Value:    "",
 		Expires:  time.Now().Add(-1 * time.Hour),
 		HTTPOnly: true,
@@ -447,6 +439,7 @@ func addProduct(c *fiber.Ctx) error {
 		log.Println("    No userID => unauthorized")
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+
 	oid, err := primitive.ObjectIDFromHex(userID)
 	if err != nil {
 		log.Println("    Invalid userID hex:", err)
@@ -497,16 +490,11 @@ func addProduct(c *fiber.Ctx) error {
 
 	}  else if externalURL != "" {
 		log.Println("    External URL provided =>", externalURL)
-	
-		// DİSKE KAYDETMEYİ SİLİYORUZ, HARİCÎ İNDİRME YOK
-		// Sadece imageURL’yi istediğimiz biçimde set edelim:
-		
-		// Mesela parametreler:
+
 		rID := user.RandomID
 		tsVal := strconv.FormatInt(time.Now().Unix(), 10)
 		randNano := time.Now().UnixNano()
 	
-		// Şu şekilde birleştiriyoruz:
 		imageURL = fmt.Sprintf("%s?id=%d?ts=%s&random=%d",
 							   externalURL,
 							   rID,
@@ -515,33 +503,6 @@ func addProduct(c *fiber.Ctx) error {
 	
 		log.Printf("    => External imageURL set to: %s\n", imageURL)
 	
-
-	/*else if externalURL != "" {
-		log.Println("    External URL provided =>", externalURL)
-
-		resp, err := http.Get(externalURL)
-		if err != nil {
-			log.Println("    Failed to GET external URL =>", err)
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Could not fetch external URL"})
-		}
-		defer resp.Body.Close()
-
-		data, err := io.ReadAll(resp.Body)
-		if err != nil {
-			log.Println("    Could not read external image =>", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to read external image"})
-		}
-
-		filename := fmt.Sprintf("ext_%d.jpg", time.Now().UnixNano()) 
-		savePath := filepath.Join("uploads", filename)
-		if err := os.WriteFile(savePath, data, 0644); err != nil {
-			log.Println("    Failed to write external image to disk =>", err)
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Failed to save external image"})
-		}
-
-		imageURL = "/uploads/" + filename
-		*/
-		log.Printf("    => External image saved to %s\n", imageURL)
 
 	} else {
 		log.Println("    No image provided (local or URL) => skipping.")
@@ -825,7 +786,7 @@ func getCart(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid randomID value"})
 	}
 	var user User
-	if err := getUserCollection().FindOne(context.TODO(), bson.M{"RandomID": randomID}).Decode(&user); err != nil {
+	if err := getUserCollection().FindOne(context.TODO(), bson.M{"randomID": randomID}).Decode(&user); err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "User not found"})
 	}
 	filter := bson.M{"user_id": user.ID}
@@ -873,6 +834,8 @@ func addToCart(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
+	
+
 	productID := c.FormValue("product_id")
 	name := c.FormValue("name")
 	priceStr := c.FormValue("price") 
@@ -918,7 +881,7 @@ func addToCart(c *fiber.Ctx) error {
 	} else {
 		newCart := Cart{
 			Id:        primitive.NewObjectID(),
-			Username:  c.Cookies("Username"),
+			Username:  c.Cookies("username"),  // bu dogru mu
 			UserID:    uid,
 			Quantity:  qtyVal,
 			Name:      name,
@@ -936,7 +899,7 @@ func addToCart(c *fiber.Ctx) error {
 	ordersColl := getCollection("orders")
 	newOrder := Order{
 		Id:        primitive.NewObjectID(),
-		Username:  c.Cookies("Username"),
+		Username:  c.Cookies("username"), // bu dogru mu
 		Name:      name,
 		Price:     priceVal,
 		Quantity:  qtyVal,
@@ -954,7 +917,7 @@ func addToCart(c *fiber.Ctx) error {
 	sellerOrdersColl := getCollection("seller-orders")
 	newSellerOrder := SellerOrder{
 		Id:        primitive.NewObjectID(),
-		Username:  c.Cookies("Username"),
+		Username:  c.Cookies("username"),
 		Name:      name,
 		Price:     priceVal,
 		Quantity:  qtyVal,
@@ -1158,31 +1121,6 @@ func getSellerOrderFromDB() ([]SellerOrder, error) {
 	return sorders, nil
 }
 
-func debugAllUsersHandler(c *fiber.Ctx) error {
-	envData, err := os.ReadFile(".env")
-	if err != nil {
-		log.Println("Error reading .env file:", err)
-		envData = []byte("Error reading .env file")
-	}
-	coll := getUserCollection()
-	cursor, err := coll.Find(context.TODO(), bson.M{})
-	if err != nil {
-		log.Println("DB find error:", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "DB find error"})
-	}
-	defer cursor.Close(context.TODO())
-	var users []User
-	if err := cursor.All(context.TODO(), &users); err != nil {
-		log.Println("DB decode error:", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "DB decode error"})
-	}
-	log.Printf("=> Found %d users total", len(users))
-	return c.JSON(fiber.Map{
-		"env":   string(envData),
-		"users": users,
-	})
-}
-
 type BuyerInfo struct {
 	Username   string  `json:"username" bson:"username"`
 	Quantity   int     `json:"quantity" bson:"quantity"`
@@ -1220,7 +1158,7 @@ func getMyOrders(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid randomID value"})
 	}
 	var seller User
-	if err := getUserCollection().FindOne(context.TODO(), bson.M{"RandomID": randomID, "Role": "seller"}).Decode(&seller); err != nil {
+	if err := getUserCollection().FindOne(context.TODO(), bson.M{"randomID": randomID, "role": "seller"}).Decode(&seller); err != nil {
 		log.Println("Seller not found with randomID:", randomID, err)
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "Seller not found"})
 	}
@@ -1361,6 +1299,7 @@ func robotsTxtHandler(c *fiber.Ctx) error {
     robotsTxt := `User-agent: *
 Allow: /
 Allow: /products
+Disallow: /.env
 Disallow: /addresses
 Disallow: /add-products
 Disallow: /add-to-cart
@@ -1451,10 +1390,10 @@ func main() {
 	app.Get("/products", getProducts)
 	app.Get("/orders", getOrders)
 	app.All("/my-orders", getMyOrders)
-	app.Get("/addresses", getAddresses)
+	app.Get("/addresses", AuthMiddleware, getAddresses)
 
 
-	app.Post("/addresses", addAddress)
+	app.Post("/addresses",AuthMiddleware, addAddress)
 	app.Get("/cards", getCards)
 	app.Post("/cards", addCard)
 
@@ -1464,4 +1403,3 @@ func main() {
 		log.Fatal(err)
 	}
 }
-

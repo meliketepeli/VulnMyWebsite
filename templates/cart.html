@@ -154,8 +154,8 @@
           $<span class="total-amount">0.00</span>
         </td>
         <td data-label="Action">
-          <form class="remove-form" action="/remove-from-cart?username={{.Username}}" method="POST">
-            <input type="hidden" name="name" value="{{.Name}}" />
+<!-- cart.html form action kısmını güncelle -->
+<form action="/remove-from-cart?username={{if .Username}}{{.Username}}{{else}}{{$.RandomID}}{{end}}" method="POST">            <input type="hidden" name="name" value="{{.Name}}" />
             <button type="submit">Remove</button>
           </form>
         </td>

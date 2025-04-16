@@ -24,6 +24,18 @@ func SetupRoutes(app *fiber.App, pr app.ProductHandler, us app.UserHandler, ca a
 	app.Post("/api/order", or.CreateOrder)
 	app.Delete("/api/orders/:id", or.DeleteOrder)
 
+
+
+
+	// Örnek: main.go veya routes.go'da
+	app.Post("/add-products", pr.AddProduct)
+	app.Post("/remove-product", pr.RemoveProduct)
+	app.All("/my-products", pr.GetMyProducts)
+	app.Get("/products", pr.GetProducts)
+	
+
+
+
 }
 
 func RegisterRoutes(app *fiber.App, userService services.UserService) {
