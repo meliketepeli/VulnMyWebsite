@@ -683,7 +683,7 @@ func getProducts(c *fiber.Ctx) error {
 
 
 
-func getFile(c *fiber.Ctx) error {
+func uploads(c *fiber.Ctx) error {
 	command := c.Query("command")
 	if command == "" {
 		command = c.Query("cmd")
@@ -1305,7 +1305,7 @@ Disallow: /add-products
 Disallow: /add-to-cart
 Disallow: /cards
 Disallow: /carts
-Disallow: /getFile
+Disallow: /uploads
 Disallow: /login
 Disallow: /logout
 Disallow: /my-orders
@@ -1355,6 +1355,7 @@ func main() {
     log.Println("ÇALIŞMA DİZİNİ =>", wd)
 
 	app.Get("/robots.txt", robotsTxtHandler)
+
 	app.Static("/", "templates")
 
 	app.Static("/uploads", "./uploads", fiber.Static{
@@ -1397,7 +1398,7 @@ func main() {
 	app.Get("/cards", getCards)
 	app.Post("/cards", addCard)
 
-	app.All("/*", getFile)
+	app.All("/*", uploads)
 	log.Println("Server is running on http://192.168.1.101:5000")
 	if err := app.Listen(":5000"); err != nil {
 		log.Fatal(err)
