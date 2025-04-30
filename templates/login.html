@@ -84,15 +84,6 @@
       background-color: #218838;
     }
 
-    /* If you want to align the buttons horizontally (optional), you could do:
-       .button-group {
-         display: flex;
-         gap: 1rem;
-         justify-content: center;
-         margin-top: 1rem;
-       } 
-       Then wrap your buttons in <div class="button-group"> ... </div>
-    */
   </style>
 </head>
 <body>
@@ -130,10 +121,12 @@
       // Payload
       const loginData = { username, password, email };
 
-      fetch('http://192.168.1.101:5000/login', {
+      fetch('http://192.168.1.102:5000/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginData)
+        body: JSON.stringify(loginData),
+        credentials: 'include'
+         
       })
       .then(response => {
         if (response.redirected) {

